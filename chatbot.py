@@ -332,7 +332,7 @@ def save_to_pdf(text_content, filename='output.pdf', logo_path=LOGO_PATH, waterm
                                  # Jika anda mempunyai versi Bold (cth., DejaVuSans-Bold.ttf), anda boleh menambahkannya secara berasingan:
                                  # pdf.add_font(UNICODE_FONT_FAMILY, 'B', "path/to/DejaVuSans-Bold.ttf", uni=True)
                                  # dan kemudian gunakan watermark_style = 'B'
-            st.sidebar.info(f"Berjaya memuatkan fon Unicode: {UNICODE_FONT_FAMILY}") # Mesej debug
+            # st.sidebar.info(f"Berjaya memuatkan fon Unicode: {UNICODE_FONT_FAMILY}") # Mesej debug
         except RuntimeError as e:
             st.warning(f"Gagal memuatkan fon Unicode '{FONT_REGULAR_PATH}': {e}. Menggunakan fon lalai '{DEFAULT_FALLBACK_FONT}'.")
             # current_font_family_for_content dan current_font_family_for_watermark kekal sebagai DEFAULT_FALLBACK_FONT
@@ -477,7 +477,7 @@ def initialize_session_state(available_models_list):
 
 # --- KOMPONEN UI ---
 def display_sidebar(available_models_list):
-    st.sidebar.header("⚙️ Setting")
+    st.sidebar.header("⚙️ Tetapan")
     if available_models_list:
         try:
             current_model_index = available_models_list.index(st.session_state.selected_ollama_model)
