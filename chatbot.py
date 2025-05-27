@@ -725,12 +725,12 @@ def main():
     if not available_ollama_models:
         st.error("Tidak dapat memuatkan senarai model dari Ollama. Pastikan Ollama berjalan dan mempunyai model. Aplikasi mungkin tidak berfungsi dengan betul.")
     
-    initialize_session_state(available_ollama_models)
+    initialize_session_state(available_ollama_models) # current_filename_prefix diinisialisasi di sini untuk sesi "new"
 
     st.caption(f"Model semasa: **{st.session_state.selected_ollama_model}**")
     
     selected_session_id_from_ui = display_sidebar(available_ollama_models)
-    handle_session_logic(selected_session_id_from_ui)
+    handle_session_logic(selected_session_id_from_ui) # Mengendalikan pemuatan sesi sedia ada atau reset ke "new"
     
     # --- Bahagian Muat Naik Fail ---
     st.sidebar.divider()
@@ -753,19 +753,12 @@ def main():
             
             st.session_state.chat_history.append({"role": "user", "content": file_content_message})
             
-            # TIDAK PERLU PLACEHOLDER UNTUK VERSI BUKAN STRIM
-            # with st.chat_message("assistant"):
-            #     response_placeholder_file = st.empty()
-            
-            # --- PERUBAHAN DI SINI: Gunakan query_ollama_non_stream ---
             with st.spinner(f"{st.session_state.selected_ollama_model.split(':')[0].capitalize()} sedang memproses kandungan fail..."):
-                assistant_response, gen_time = query_ollama_non_stream( # Tukar di sini
+                assistant_response, gen_time = query_ollama_non_stream(
                     file_content_message,
-                    st.session_state.chat_history, # Hantar sejarah terkini
+                    st.session_state.chat_history, 
                     st.session_state.selected_ollama_model
-                    # Tidak perlu response_placeholder_file
                 )
-            # --- TAMAT PERUBAHAN ---
 
             st.session_state.chat_history.append({
                 "role": "assistant", 
@@ -773,15 +766,25 @@ def main():
                 "time_taken": gen_time
             })
             
-            # ... (logik simpan sesi sedia ada) ...
+            # --- LOGIK PENYIMPANAN DIPERBAIKI ---
+            if st.session_state.session_id == "new":
+                # Ini adalah mesej pertama dalam sesi baru.
+                # Gunakan current_filename_prefix (yang sepatutnya cap masa) sebagai ID sesi baru.
+                st.session_state.session_id = st.session_state.current_filename_prefix
+                # Selepas ini, session_id tidak lagi "new" untuk interaksi seterusnya dalam sesi ini.
+            
+            # Simpan sesi (sama ada sesi baru yang IDnya baru ditetapkan, atau sesi sedia ada yang dikemas kini)
+            save_chat_session(st.session_state.session_id, st.session_state.chat_history)
+            # --- TAMAT LOGIK PENYIMPANAN DIPERBAIKI ---
         
-        elif extracted_text is None:
+        elif extracted_text is None: 
+            # Mesej ralat/amaran sudah dipaparkan oleh extract_text_from_file
             pass
-        else:
+        else: # extracted_text adalah string kosong
             st.warning(f"Tiada teks dapat diekstrak dari fail '{uploaded_file.name}'.")
 
         st.session_state.uploader_key_counter += 1
-        st.rerun() # Rerun diperlukan untuk memaparkan mesej baru
+        st.rerun() # Rerun diperlukan untuk memaparkan mesej baru dan mengosongkan pemuat naik fail
 
     display_chat_messages_paginated()
 
@@ -791,19 +794,12 @@ def main():
     if user_input:
         st.session_state.chat_history.append({"role": "user", "content": user_input})
         
-        # TIDAK PERLU PLACEHOLDER UNTUK VERSI BUKAN STRIM
-        # with st.chat_message("assistant"):
-        #     response_placeholder_input = st.empty()
-        
-        # --- PERUBAHAN DI SINI: Gunakan query_ollama_non_stream ---
-        with st.spinner(f"{friendly_model_name} sedang menaip..."): # Spinner masih berguna
-            assistant_response_text, generation_time = query_ollama_non_stream( # Tukar di sini
-                user_input,
-                st.session_state.chat_history, # Hantar sejarah terkini
+        with st.spinner(f"{friendly_model_name} sedang menaip..."): 
+            assistant_response_text, generation_time = query_ollama_non_stream(
+                user_input, 
+                st.session_state.chat_history, 
                 st.session_state.selected_ollama_model
-                # Tidak perlu response_placeholder_input
             )
-        # --- TAMAT PERUBAHAN ---
         
         st.session_state.chat_history.append({
             "role": "assistant", 
@@ -811,7 +807,16 @@ def main():
             "time_taken": generation_time
         })
 
-        # ... (logik simpan sesi sedia ada) ...
+        # --- LOGIK PENYIMPANAN DIPERBAIKI ---
+        if st.session_state.session_id == "new":
+            # Ini adalah mesej pertama dalam sesi baru.
+            # Gunakan current_filename_prefix (yang sepatutnya cap masa) sebagai ID sesi baru.
+            st.session_state.session_id = st.session_state.current_filename_prefix
+            # Selepas ini, session_id tidak lagi "new" untuk interaksi seterusnya dalam sesi ini.
+        
+        # Simpan sesi (sama ada sesi baru yang IDnya baru ditetapkan, atau sesi sedia ada yang dikemas kini)
+        save_chat_session(st.session_state.session_id, st.session_state.chat_history)
+        # --- TAMAT LOGIK PENYIMPANAN DIPERBAIKI ---
         
         total_messages = len(st.session_state.chat_history)
         page_size = 10 
