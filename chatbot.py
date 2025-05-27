@@ -477,7 +477,7 @@ def initialize_session_state(available_models_list):
 
 # --- KOMPONEN UI ---
 def display_sidebar(available_models_list):
-    st.sidebar.header("⚙️ Tetapan")
+    st.sidebar.header("⚙️ Setting")
     if available_models_list:
         try:
             current_model_index = available_models_list.index(st.session_state.selected_ollama_model)
