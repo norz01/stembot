@@ -1,0 +1,10 @@
+streamlit
+requests
+python-docx
+fpdf2
+pandas
+openpyxl
+python-pptx
+Pillow
+pytesseract
+PyMuPDF
