@@ -714,18 +714,32 @@ def display_export_options():
                 except FileNotFoundError: st.error(f"Gagal mencari {exported_filename} untuk dimuat turun.")
                 except Exception as e: st.error(f"Ralat muat turun: {e}")
 
-# --- FUNGSI UTAMA APLIKASI (dengan sedikit penyesuaian untuk UI) ---
+# --- FUNGSI UTAMA APLIKASI (dengan logo di atas tajuk) ---
 def main():
     st.set_page_config(page_title="DFK Stembot", layout="wide", initial_sidebar_state="expanded", page_icon="🤖")
     
-    # Tajuk Utama Aplikasi - Boleh diletakkan di sini atau di dalam main container
-    # st.title("🤖 DFK Stembot") # Tajuk asal
+    # --- BAHAGIAN LOGO DAN TAJUK ---
+    # Semak jika fail logo wujud
+    if os.path.exists("ikm_logo.png"):
+        # Gunakan columns untuk menengahkan logo
+        # Anda boleh melaraskan nisbah lajur jika perlu
+        # Contoh: [1, 2, 1] bermaksud lajur tengah dua kali lebih lebar daripada lajur tepi
+        col_logo_space1, col_logo, col_logo_space2 = st.columns([1, 2, 1]) 
+        with col_logo:
+            try:
+                st.image("ikm_logo.png", width=150) # Laraskan 'width' mengikut kesesuaian saiz logo anda
+            except Exception as e:
+                st.warning(f"Gagal memaparkan logo: {e}")
+    else:
+        st.warning(f"Fail logo tidak ditemui di: {"ikm_logo.png"}")
 
-    # Gunakan columns untuk tajuk dan mungkin status model
-    col_title, col_status = st.columns([3, 1])
-    with col_title:
-        st.markdown("# 🤖 DFK Stembot") # Saiz lebih besar dengan Markdown
-        # st.header("🤖 DFK Stembot") # Alternatif lain
+    # Tajuk Aplikasi - kini di bawah logo
+    st.markdown("<h1 style='text-align: center;'>🤖 DFK Stembot</h1>", unsafe_allow_html=True)
+    # st.markdown("---") # Garisan pembahagi pilihan selepas tajuk
+
+    # Status Model (boleh kekal di sini atau dipindahkan jika perlu)
+    # Jika mahu status model di bawah tajuk juga, boleh letak di sini
+    # Atau jika mahu ia lebih diskret, boleh letak di sidebar atau footer
     
     # Inisialisasi state dan model
     available_ollama_models = get_ollama_models_cached()
@@ -734,19 +748,23 @@ def main():
     
     initialize_session_state(available_ollama_models)
 
-    with col_status:
-        if st.session_state.selected_ollama_model:
-            st.caption(f"Model Aktif: **{st.session_state.selected_ollama_model.split(':')[0]}**")
-        else:
-            st.caption("Model tidak dipilih")
+    # Status model boleh diletakkan di sini jika mahu ia di bawah tajuk utama
+    # atau di sidebar seperti sebelumnya.
+    # Untuk contoh ini, kita letakkan di bawah tajuk.
+    if st.session_state.selected_ollama_model:
+        st.markdown(f"<p style='text-align: center; color: grey;'>Model Aktif: <b>{st.session_state.selected_ollama_model.split(':')[0]}</b></p>", unsafe_allow_html=True)
+    else:
+        st.markdown("<p style='text-align: center; color: red;'>Model tidak dipilih</p>", unsafe_allow_html=True)
     
+    st.markdown("---") # Garisan pembahagi selepas tajuk dan status model
+
     # Sidebar
     selected_session_id_from_ui = display_sidebar(available_ollama_models)
-    handle_session_logic(selected_session_id_from_ui)
+    handle_session_logic(selected_session_id_from_ui) # Pastikan fungsi ini wujud
     
     # --- Bahagian Muat Naik Fail (dalam sidebar) ---
     with st.sidebar:
-        st.markdown("---")
+        st.markdown("---") # Pembahagi dalam sidebar jika belum ada
         st.markdown("#### 📎 Muat Naik & Analisis Fail")
         uploader_key = f"file_uploader_{st.session_state.uploader_key_counter}"
         uploaded_file = st.file_uploader(
@@ -757,13 +775,11 @@ def main():
         )
 
         if uploaded_file is not None:
-            # ... (logik pemprosesan fail sedia ada anda) ...
-            # Pastikan spinner dan mesej info/warning/error masih jelas
             with st.spinner(f"Memproses '{uploaded_file.name}'..."):
                 extracted_text = extract_text_from_file(uploaded_file)
             
             if extracted_text:
-                st.success(f"Teks diekstrak dari '{uploaded_file.name}'.") # Guna success untuk maklum balas positif
+                st.success(f"Teks diekstrak dari '{uploaded_file.name}'.")
                 file_content_message = f"Kandungan dari fail '{uploaded_file.name}':\n\n{extracted_text}"
                 st.session_state.chat_history.append({"role": "user", "content": file_content_message})
                 
@@ -781,7 +797,7 @@ def main():
                 save_chat_session(st.session_state.session_id, st.session_state.chat_history)
             
             elif extracted_text is None: 
-                pass # Mesej sudah dipaparkan oleh extract_text_from_file
+                pass 
             else: 
                 st.warning(f"Tiada teks diekstrak dari '{uploaded_file.name}'.")
 
@@ -789,15 +805,14 @@ def main():
             st.rerun()
 
     # Kawasan Sembang Utama
-    chat_container = st.container() # Gunakan container untuk kawal susun atur jika perlu
+    chat_container = st.container() 
     with chat_container:
         display_chat_messages_paginated()
 
-    # Input Pengguna (di luar container sembang, di bahagian bawah)
+    # Input Pengguna
     user_input = st.chat_input(f"Tanya {st.session_state.selected_ollama_model.split(':')[0].capitalize()}...")
 
     if user_input:
-        # ... (logik pemprosesan input pengguna sedia ada anda) ...
         st.session_state.chat_history.append({"role": "user", "content": user_input})
         with st.spinner(f"Sedang berfikir..."): 
             assistant_response_text, generation_time = query_ollama_non_stream(
