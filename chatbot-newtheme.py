@@ -721,25 +721,27 @@ def main():
     # --- BAHAGIAN LOGO DAN TAJUK ---
     # Semak jika fail logo wujud
     if os.path.exists("ikm_logo.png"):
-        # Gunakan columns untuk menengahkan logo
-        # Anda boleh melaraskan nisbah lajur jika perlu
-        # Contoh: [1, 2, 1] bermaksud lajur tengah dua kali lebih lebar daripada lajur tepi
-        col_logo_space1, col_logo, col_logo_space2 = st.columns([1, 2, 1]) 
+        # Gunakan columns untuk menengahkan logo.
+        # Nisbah [1, 2, 1] bermaksud lajur kiri dan kanan bertindak sebagai padding,
+        # dan lajur tengah (col_logo) akan mengambil ruang utama di tengah.
+        # Imej akan ditengahkan di dalam col_logo ini.
+        col_logo_space1, col_logo, col_logo_space2 = st.columns([
+            1.6, # Lebar lajur kiri (ruang)
+            2, # Lebar lajur tengah (untuk logo)
+            1  # Lebar lajur kanan (ruang)
+        ]) 
         with col_logo:
             try:
-                st.image("ikm_logo.png", width=150) # Laraskan 'width' mengikut kesesuaian saiz logo anda
+                # Cuba besarkan logo, contohnya kepada width=200 atau 250.
+                # Anda boleh laraskan nilai ini sehingga berpuas hati.
+                st.image("ikm_logo.png", width=350) 
             except Exception as e:
                 st.warning(f"Gagal memaparkan logo: {e}")
     else:
         st.warning(f"Fail logo tidak ditemui di: {"ikm_logo.png"}")
 
-    # Tajuk Aplikasi - kini di bawah logo
-    st.markdown("<h1 style='text-align: center;'>🤖 DFK Stembot</h1>", unsafe_allow_html=True)
-    # st.markdown("---") # Garisan pembahagi pilihan selepas tajuk
-
-    # Status Model (boleh kekal di sini atau dipindahkan jika perlu)
-    # Jika mahu status model di bawah tajuk juga, boleh letak di sini
-    # Atau jika mahu ia lebih diskret, boleh letak di sidebar atau footer
+    # Tajuk Aplikasi - kini di bawah logo, juga ditengahkan
+    st.markdown("<h1 style='text-align: center; margin-top: 0px; margin-bottom: 10px;'>🤖 DFK Stembot</h1>", unsafe_allow_html=True)
     
     # Inisialisasi state dan model
     available_ollama_models = get_ollama_models_cached()
@@ -748,23 +750,21 @@ def main():
     
     initialize_session_state(available_ollama_models)
 
-    # Status model boleh diletakkan di sini jika mahu ia di bawah tajuk utama
-    # atau di sidebar seperti sebelumnya.
-    # Untuk contoh ini, kita letakkan di bawah tajuk.
+    # Status model
     if st.session_state.selected_ollama_model:
-        st.markdown(f"<p style='text-align: center; color: grey;'>Model Aktif: <b>{st.session_state.selected_ollama_model.split(':')[0]}</b></p>", unsafe_allow_html=True)
+        st.markdown(f"<p style='text-align: center; color: grey; margin-bottom: 20px;'>Model Aktif: <b>{st.session_state.selected_ollama_model.split(':')[0]}</b></p>", unsafe_allow_html=True)
     else:
-        st.markdown("<p style='text-align: center; color: red;'>Model tidak dipilih</p>", unsafe_allow_html=True)
+        st.markdown("<p style='text-align: center; color: red; margin-bottom: 20px;'>Model tidak dipilih</p>", unsafe_allow_html=True)
     
     st.markdown("---") # Garisan pembahagi selepas tajuk dan status model
 
     # Sidebar
     selected_session_id_from_ui = display_sidebar(available_ollama_models)
-    handle_session_logic(selected_session_id_from_ui) # Pastikan fungsi ini wujud
+    handle_session_logic(selected_session_id_from_ui) 
     
     # --- Bahagian Muat Naik Fail (dalam sidebar) ---
     with st.sidebar:
-        st.markdown("---") # Pembahagi dalam sidebar jika belum ada
+        st.markdown("---") 
         st.markdown("#### 📎 Muat Naik & Analisis Fail")
         uploader_key = f"file_uploader_{st.session_state.uploader_key_counter}"
         uploaded_file = st.file_uploader(
