@@ -1,12 +1,18 @@
-# Gunakan model dasar Gemma 1.1 12B Instruct QAT
-# Pastikan model ini sudah ada atau boleh dimuat turun oleh Ollama
-FROM gemma3:12b-it-qat
+# Arahan FROM merujuk kepada path ke fail GGUF tempatan anda.
+# Sila gantikan "/path/to/your/models/gemma-3-12b-it-q4_0.gguf"
+# dengan path sebenar ke fail GGUF anda.
+# Contoh: FROM ./gemma-3-12b-it-q4_0.gguf (jika fail berada dalam direktori yang sama)
+# Contoh: FROM /home/user/models/gemma-3-12b-it-q4_0.gguf (path mutlak)
+FROM /path/to/your/models/gemma-3-12b-it-q4_0.gguf
 
 # Tetapkan parameter untuk jawapan yang lebih fokus dan kurang rawak
-# Nilai yang lebih rendah sesuai untuk peranan pakar yang memerlukan ketepatan
-PARAMETER temperature 0.3
+PARAMETER temperature 0.25
 PARAMETER top_k 30
-PARAMETER top_p 0.8
+PARAMETER top_p 0.85
+# PARAMETER num_ctx 4096 # Saiz konteks, Gemma biasanya menyokong 8192. Sesuaikan jika perlu.
+# Gemma menggunakan <end_of_turn> sebagai penanda akhir giliran.
+PARAMETER stop "<end_of_turn>"
+PARAMETER stop "<start_of_turn>user"
 
 # Templat prompt khusus untuk model Gemma (penting untuk prestasi optimum)
 # Format ini menggunakan penanda <start_of_turn> dan <end_of_turn>
@@ -33,19 +39,19 @@ Fokus anda adalah ketepatan dan relevansi dalam domain STEM.
 # Ini boleh membantu model memahami dengan lebih baik bagaimana untuk bertindak balas.
 # Pastikan format mesej ini juga menggunakan penanda giliran Gemma.
 MESSAGE user """<start_of_turn>user
-Apakah maksud daya?<end_of_turn>"""
+Apakah itu Algoritma Dijkstra?<end_of_turn>"""
 MESSAGE assistant """<start_of_turn>model
-Dalam fizik, daya ialah tolakan atau tarikan yang boleh menyebabkan objek dengan jisim mengalami pecutan. Daya mempunyai magnitud dan arah, menjadikannya kuantiti vektor. Unit SI bagi daya ialah Newton (N).<end_of_turn>"""
+Algoritma Dijkstra ialah algoritma untuk mencari laluan terpendek antara nod dalam graf, yang mungkin mewakili, sebagai contoh, rangkaian jalan raya. Ia dibangunkan oleh ahli sains komputer Edsger W. Dijkstra pada tahun 1956. Algoritma ini berfungsi dengan membina set nod yang laluan terpendek dari sumber ke nod tersebut telah diketahui.<end_of_turn>"""
 
 MESSAGE user """<start_of_turn>user
-Siapa pelakon utama filem 'Parasite'?<end_of_turn>"""
+Apakah ramalan cuaca untuk esok?<end_of_turn>"""
 MESSAGE assistant """<start_of_turn>model
 Maaf, saya hanya boleh menjawab soalan berkaitan Sains, Teknologi, Kejuruteraan, dan Matematik.<end_of_turn>"""
 
 MESSAGE user """<start_of_turn>user
-Terangkan Teorem Pythagoras.<end_of_turn>"""
+Terangkan konsep Relativiti Khas Einstein.<end_of_turn>"""
 MESSAGE assistant """<start_of_turn>model
-Teorem Pythagoras menyatakan bahawa dalam segi tiga bersudut tepat, kuasa dua panjang sisi hipotenus (sisi yang bertentangan dengan sudut tepat) adalah sama dengan hasil tambah kuasa dua panjang dua sisi yang lain. Secara matematik, ia dinyatakan sebagai a² + b² = c², di mana c ialah panjang hipotenus, dan a serta b ialah panjang dua sisi yang lain.<end_of_turn>"""
+Teori Relativiti Khas, yang dicadangkan oleh Albert Einstein pada tahun 1905, merevolusikan pemahaman kita tentang ruang dan masa. Ia berdasarkan dua postulat utama: pertama, hukum fizik adalah sama untuk semua pemerhati dalam kerangka rujukan inersia (iaitu, tidak memecut). Kedua, kelajuan cahaya dalam vakum adalah sama untuk semua pemerhati inersia, tanpa mengira gerakan sumber cahaya atau pemerhati. Antara implikasinya yang terkenal ialah kesetaraan jisim-tenaga (E=mc²), dilasi masa, dan kontraksi panjang.<end_of_turn>"""
 
 # (Pilihan) Anda boleh menambah maklumat lesen jika perlu
-LICENSE """Made by Norz"""
+# LICENSE """Lesen untuk model GGUF ini (jika ada)."""
