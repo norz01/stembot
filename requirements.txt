@@ -8,3 +8,4 @@ python-pptx
 Pillow
 pytesseract
 PyMuPDF
+bcrypt
