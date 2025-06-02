@@ -3,7 +3,7 @@ import requests
 from docx import Document
 from docx.shared import Inches as DocxInches, Pt as DocxPt, RGBColor as DocxRGBColor
 from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
-from fpdf import FPDF # Pastikan ini adalah fpdf2: pip install fpdf2
+from fpdf import FPDF
 import pandas as pd
 from datetime import datetime
 import os
@@ -13,27 +13,102 @@ from pptx.util import Inches as PptxInches, Pt as PptxPt
 from pptx.dml.color import RGBColor as PptxRGBColor
 import time
 from PIL import Image
-import pytesseract # Anda mungkin perlu memasang Tesseract OCR: https://github.com/tesseract-ocr/tesseract
-import fitz  # PyMuPDF untuk PDF: pip install PyMuPDF
+import pytesseract
+import fitz
+import bcrypt
 
 # --- KONFIGURASI ---
-HISTORY_DIR = "chat_sessions"
-UPLOAD_DIR = "uploaded_files" 
+HISTORY_DIR = "chat_sessions"  # Direktori utama untuk semua sesi pengguna
+UPLOAD_DIR = "uploaded_files"
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-DEFAULT_OLLAMA_MODEL = os.getenv("DEFAULT_OLLAMA_MODEL", "llama3") 
-
-LOGO_PATH = os.getenv("ikm_logo", "ikm_logo.png") 
+DEFAULT_OLLAMA_MODEL = os.getenv("DEFAULT_OLLAMA_MODEL", "STEMBot-4B") # Pastikan model ini wujud
+LOGO_PATH = os.getenv("ikm_logo", "ikm_logo.png") # Guna pembolehubah ini
 WATERMARK_TEXT = os.getenv("CHATBOT_WATERMARK_TEXT", "IKM Besut")
-# pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe' # Contoh untuk Windows
+USERS_DIR = "user_data"
+USERS_FILE = os.path.join(USERS_DIR, "users.json")
 
-os.makedirs(HISTORY_DIR, exist_ok=True)
+# Pastikan direktori wujud
+os.makedirs(HISTORY_DIR, exist_ok=True) # Hanya direktori utama
 os.makedirs(UPLOAD_DIR, exist_ok=True)
+os.makedirs(USERS_DIR, exist_ok=True)
 
-# --- FUNGSI HELPER (Tidak Berubah Melainkan Dinyatakan) ---
+# --- FUNGSI PENGURUSAN AKAUN (Tidak Berubah) ---
+def load_users():
+    if not os.path.exists(USERS_FILE):
+        with open(USERS_FILE, "w") as f:
+            json.dump({}, f)
+    with open(USERS_FILE, "r") as f:
+        return json.load(f)
 
+def save_users(users):
+    with open(USERS_FILE, "w") as f:
+        json.dump(users, f, indent=2)
+
+def hash_password(password):
+    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+
+def verify_password(password, hashed):
+    return bcrypt.checkpw(password.encode(), hashed.encode())
+
+# --- HALAMAN LOGIN & PENDAFTARAN (Tidak Berubah) ---
+def login_page():
+    st.title("🔐 Log Masuk")
+    username = st.text_input("Nama Pengguna", key="login_username")
+    password = st.text_input("Kata Laluan", type="password", key="login_password")
+    
+    if st.button("Log Masuk", type="primary", use_container_width=True):
+        users = load_users()
+        if username in users and verify_password(password, users[username]["password"]):
+            st.session_state.authenticated = True
+            st.session_state.username = username
+            st.success("Berjaya log masuk!")
+            st.rerun()
+        else:
+            st.error("Nama pengguna atau kata laluan salah.")
+
+def register_page():
+    st.title("📝 Daftar Akaun")
+    username = st.text_input("Nama Pengguna Baru", key="register_username")
+    password = st.text_input("Kata Laluan", type="password", key="register_password")
+    confirm_password = st.text_input("Sahkan Kata Laluan", type="password", key="confirm_password")
+    
+    if st.button("Daftar", type="primary", use_container_width=True):
+        if not username or not password:
+            st.warning("Sila lengkapkan semua medan.")
+            return
+        if password != confirm_password:
+            st.error("Kata laluan tidak sepadan.")
+            return
+        users = load_users()
+        if username in users:
+            st.error("Nama pengguna telah wujud.")
+            return
+        users[username] = {
+            "password": hash_password(password),
+            "created_at": datetime.now().isoformat()
+        }
+        save_users(users)
+        st.success("Akaun berjaya didaftarkan! Sila log masuk.")
+        # st.session_state.show_register = False # Tidak perlu jika guna tabs
+        st.rerun()
+
+def authentication_ui():
+    if "authenticated" not in st.session_state:
+        st.session_state.authenticated = False
+    
+    if not st.session_state.authenticated:
+        st.markdown("## Selamat Datang ke DFK Stembot")
+        tab1, tab2 = st.tabs(["Log Masuk", "Daftar Akaun"])
+        with tab1:
+            login_page()
+        with tab2:
+            register_page()
+        return False
+    return True
+
+# --- FUNGSI HELPER ---
 @st.cache_data(ttl=300)
 def get_ollama_models_cached():
-    """Mendapatkan senarai model yang tersedia dari Ollama dan mengcache hasilnya."""
     try:
         response = requests.get(f'{OLLAMA_BASE_URL}/api/tags', timeout=10)
         response.raise_for_status()
@@ -41,187 +116,125 @@ def get_ollama_models_cached():
         if not models_data:
             return []
         return sorted([model['name'] for model in models_data])
-    except requests.exceptions.Timeout:
-        st.error(f"Gagal mendapatkan senarai model: Permintaan ke Ollama tamat masa.")
-        return []
     except requests.exceptions.RequestException:
-        # St.error("Gagal menyambung ke Ollama untuk mendapatkan senarai model.") # Kurangkan mesej ralat jika tiada sambungan
+        # st.error("Gagal menyambung ke Ollama untuk mendapatkan senarai model.")
         return []
-    except KeyError:
-        st.error("Format respons senarai model tidak dijangka dari Ollama.")
+    except Exception: # Tangkap semua yang lain
+        # st.error("Ralat tidak dijangka semasa mendapatkan senarai model.")
         return []
 
-# --- PERUBAHAN DI SINI ---
 def query_ollama_non_stream(prompt, chat_history, selected_model):
-    """
-    Menghantar pertanyaan ke Ollama dan mengembalikan respons akhir, proses pemikiran (jika ada),
-    serta masa penjanaan (NON-STREAM).
-    """
     messages_for_api = [{"role": msg["role"], "content": msg["content"]} for msg in chat_history]
-    
     is_prompt_already_last_user_message = False
     if messages_for_api and messages_for_api[-1]["role"] == "user" and messages_for_api[-1]["content"] == prompt:
         is_prompt_already_last_user_message = True
-    
     if not is_prompt_already_last_user_message:
          messages_for_api.append({"role": "user", "content": prompt})
 
     start_time = time.time()
-    thinking_process = "" # Inisialisasi di luar try-block
-    assistant_reply = "Maaf, saya tidak dapat respons yang betul." # Inisialisasi lalai
-
+    thinking_process = "" 
+    assistant_reply = "Maaf, saya tidak dapat respons yang betul." 
     try:
         payload = {'model': selected_model, 'messages': messages_for_api, 'stream': False}
         response = requests.post(f'{OLLAMA_BASE_URL}/api/chat', json=payload, timeout=600) 
-        response.raise_for_status() # Ini akan mencetuskan HTTPError untuk status 4xx/5xx
-        
-        full_response_data = response.json() # Pastikan ini hanya dipanggil jika status OK
+        response.raise_for_status()
+        full_response_data = response.json()
         raw_assistant_reply = full_response_data.get('message', {}).get('content')
-
-        if raw_assistant_reply is None: # Jika 'content' tiada atau null
+        if raw_assistant_reply is None:
             raw_assistant_reply = "Maaf, respons dari model tidak mengandungi kandungan."
-            assistant_reply = raw_assistant_reply # Tetapkan juga assistant_reply
+            assistant_reply = raw_assistant_reply
         else:
-            assistant_reply = raw_assistant_reply # Tetapkan nilai awal
-
-        # Logik untuk memisahkan proses pemikiran dan jawapan akhir
-        thinking_start_tag = "<think>"
+            assistant_reply = raw_assistant_reply
+        thinking_start_tag = "<think>" # Tag pemikiran anda
         thinking_end_tag = "</think>"
-
-        # Hanya cuba ekstrak jika kedua-dua tag ada
         if thinking_start_tag in raw_assistant_reply and thinking_end_tag in raw_assistant_reply:
             try:
                 start_index = raw_assistant_reply.find(thinking_start_tag)
                 end_index = raw_assistant_reply.find(thinking_end_tag)
-
                 if 0 <= start_index < end_index:
                     thinking_process = raw_assistant_reply[start_index + len(thinking_start_tag):end_index].strip()
-                    
                     text_after_thinking = raw_assistant_reply[end_index + len(thinking_end_tag):].strip()
                     text_before_thinking = raw_assistant_reply[:start_index].strip()
-
                     if text_after_thinking:
                         assistant_reply = text_after_thinking
                     elif text_before_thinking:
                         assistant_reply = text_before_thinking
                     elif thinking_process: 
                         assistant_reply = "" 
-                    # Jika tiada teks sebelum atau selepas, dan thinking_process juga kosong (jarang berlaku jika tag ada),
-                    # assistant_reply akan kekal sebagai raw_assistant_reply dari atas.
-                # Jika tag tidak dalam susunan betul atau start_index negatif, biarkan assistant_reply sebagai raw_assistant_reply
-                # dan thinking_process sebagai string kosong.
             except Exception as e_parse:
-                # Jika ada ralat semasa parsing tag, log dan guna raw_assistant_reply
                 st.warning(f"Ralat kecil semasa memproses tag pemikiran: {e_parse}. Menggunakan respons penuh.")
-                assistant_reply = raw_assistant_reply # Fallback ke raw_assistant_reply
-                thinking_process = "" # Pastikan thinking_process kosong
-        # Jika tag tidak ditemui, assistant_reply sudah ditetapkan kepada raw_assistant_reply, dan thinking_process kekal ""
-
-        end_time = time.time() # Pindahkan ke sini untuk mengira masa walaupun ada ralat parsing kecil
+                assistant_reply = raw_assistant_reply
+                thinking_process = ""
+        end_time = time.time()
         processing_time = end_time - start_time
         return assistant_reply, thinking_process, processing_time
-
-    except requests.exceptions.HTTPError as http_err: # Tangkap ralat HTTP secara spesifik
+    except requests.exceptions.HTTPError as http_err:
         end_time = time.time(); processing_time = end_time - start_time
         st.error(f"Ralat HTTP dari Ollama: {http_err} (selepas {processing_time:.2f}s)")
-        # Anda mungkin mahu memeriksa response.text atau response.json() untuk butiran lanjut jika ada
         try:
             error_details = response.json().get("error", "Tiada butiran ralat tambahan.")
             st.error(f"Butiran dari Ollama: {error_details}")
             return f"Maaf, berlaku ralat HTTP semasa menghubungi Ollama: {error_details}", "", processing_time
-        except: # Jika respons bukan JSON atau tiada 'error'
+        except:
              return f"Maaf, berlaku ralat HTTP semasa menghubungi Ollama ({http_err.response.status_code}).", "", processing_time
     except requests.exceptions.Timeout:
         end_time = time.time(); processing_time = end_time - start_time
         st.error(f"Gagal mendapatkan respons: Permintaan ke Ollama tamat masa selepas {processing_time:.2f}s.")
         return "Maaf, permintaan tamat masa.", "", processing_time
-    except requests.exceptions.RequestException as e: # Ini untuk ralat sambungan, DNS, dll.
+    except requests.exceptions.RequestException as e:
         end_time = time.time(); processing_time = end_time - start_time
         st.error(f"Masalah menyambung ke Ollama: {e} (selepas {processing_time:.2f}s)")
         return "Maaf, berlaku masalah semasa menghubungi Ollama.", "", processing_time
-    except json.JSONDecodeError: # Jika respons bukan JSON yang sah
+    except json.JSONDecodeError:
         end_time = time.time(); processing_time = end_time - start_time
         st.error(f"Format respons tidak dijangka (bukan JSON) dari Ollama (selepas {processing_time:.2f}s).")
         return "Maaf, format respons dari Ollama tidak seperti yang dijangkakan.", "", processing_time
-    except KeyError: # Jika struktur JSON tidak seperti yang dijangka (cth: tiada 'message' atau 'content')
+    except KeyError:
         end_time = time.time(); processing_time = end_time - start_time
         st.error(f"Struktur data respons tidak dijangka dari Ollama (selepas {processing_time:.2f}s).")
         return "Maaf, struktur data respons dari Ollama tidak seperti yang dijangkakan.", "", processing_time
-    except Exception as e: # Tangkap semua ralat lain yang mungkin berlaku
+    except Exception as e:
         end_time = time.time(); processing_time = end_time - start_time
         st.error(f"Ralat tidak dijangka dalam query_ollama_non_stream: {e} (selepas {processing_time:.2f}s)")
         return "Maaf, ralat tidak dijangka berlaku semasa memproses permintaan.", "", processing_time
-# --- TAMAT PERUBAHAN query_ollama_non_stream ---
 
-# Fungsi query_ollama (stream) tidak diubah dalam konteks permintaan ini
-def query_ollama(prompt, chat_history, selected_model, response_placeholder):
-    """Menghantar pertanyaan ke Ollama dan stream respons ke placeholder Streamlit."""
-    messages_for_api = [{"role": msg["role"], "content": msg["content"]} for msg in chat_history]
-    start_time = time.time()
-    full_response_content = ""
-    try:
-        payload = {'model': selected_model, 'messages': messages_for_api, 'stream': True}
-        with requests.post(f'{OLLAMA_BASE_URL}/api/chat', json=payload, stream=True, timeout=600) as response:
-            response.raise_for_status()
-            for line in response.iter_lines():
-                if line:
-                    decoded_line = line.decode('utf-8')
-                    try:
-                        chunk = json.loads(decoded_line)
-                        if 'message' in chunk and isinstance(chunk['message'], dict):
-                            content_piece = chunk['message'].get('content', '')
-                            if content_piece:
-                                full_response_content += content_piece
-                                response_placeholder.markdown(full_response_content + "▌")
-                        if chunk.get("done"):
-                            final_message_in_done_chunk = chunk.get('message', {}).get('content', '')
-                            if final_message_in_done_chunk and not full_response_content.endswith(final_message_in_done_chunk):
-                                full_response_content += final_message_in_done_chunk
-                            break
-                    except json.JSONDecodeError:
-                        pass
-        end_time = time.time()
-        processing_time = end_time - start_time
-        response_placeholder.markdown(full_response_content)
-        return full_response_content, processing_time # Untuk strim, kita tidak ekstrak 'thinking' secara berasingan di sini
-    except requests.exceptions.Timeout:
-        end_time = time.time(); processing_time = end_time - start_time
-        error_message = f"Gagal mendapatkan respons: Permintaan ke Ollama tamat masa selepas {processing_time:.2f}s."
-        response_placeholder.error(error_message)
-        return "Maaf, permintaan tamat masa.", processing_time
-    except requests.exceptions.RequestException as e:
-        end_time = time.time(); processing_time = end_time - start_time
-        error_message = f"Masalah menyambung ke Ollama: {e} (selepas {processing_time:.2f}s)"
-        response_placeholder.error(error_message)
-        return "Maaf, berlaku masalah semasa menghubungi Ollama.", processing_time
-    except Exception as e:
-        end_time = time.time(); processing_time = end_time - start_time
-        error_message = f"Ralat tidak dijangka semasa strim: {e} (selepas {processing_time:.2f}s)"
-        response_placeholder.error(error_message)
-        return "Maaf, ralat tidak dijangka berlaku.", processing_time
+# --- PERUBAHAN PADA FUNGSI PENGURUSAN SESI ---
+def get_user_history_dir(username):
+    """Mendapatkan direktori sejarah untuk pengguna tertentu."""
+    user_dir = os.path.join(HISTORY_DIR, username)
+    os.makedirs(user_dir, exist_ok=True) # Pastikan direktori pengguna wujud
+    return user_dir
 
-def save_chat_session(session_id, history):
-    filepath = os.path.join(HISTORY_DIR, f"{session_id}.json")
+def save_chat_session(username, session_id, history):
+    """Menyimpan sesi perbualan untuk pengguna tertentu."""
+    user_history_dir = get_user_history_dir(username)
+    filepath = os.path.join(user_history_dir, f"{session_id}.json")
     try:
         with open(filepath, "w", encoding="utf-8") as f:
             json.dump(history, f, indent=2)
     except IOError as e:
-        st.error(f"Gagal menyimpan sesi Perbualan '{session_id}': {e}")
+        st.error(f"Gagal menyimpan sesi Perbualan '{session_id}' untuk pengguna '{username}': {e}")
 
-def load_chat_session(session_id):
-    filepath = os.path.join(HISTORY_DIR, f"{session_id}.json")
+def load_chat_session(username, session_id):
+    """Memuatkan sesi perbualan untuk pengguna tertentu."""
+    user_history_dir = get_user_history_dir(username)
+    filepath = os.path.join(user_history_dir, f"{session_id}.json")
     try:
         with open(filepath, "r", encoding="utf-8") as f:
             return json.load(f)
     except FileNotFoundError:
         return []
     except (json.JSONDecodeError, IOError) as e:
-        st.error(f"Gagal memuatkan atau membaca sesi Perbualan '{session_id}': {e}")
+        st.error(f"Gagal memuatkan sesi Perbualan '{session_id}' untuk pengguna '{username}': {e}")
         return []
 
-def load_all_session_ids():
+def load_all_session_ids(username):
+    """Memuatkan semua ID sesi untuk pengguna tertentu."""
+    user_history_dir = get_user_history_dir(username)
     try:
-        files = [f.replace(".json", "") for f in os.listdir(HISTORY_DIR) if f.endswith(".json")]
+        if not os.path.exists(user_history_dir): # Jika pengguna belum ada sesi
+            return []
+        files = [f.replace(".json", "") for f in os.listdir(user_history_dir) if f.endswith(".json")]
         def sort_key(filename):
             try:
                 parts = filename.split('_')
@@ -231,11 +244,13 @@ def load_all_session_ids():
             return datetime.min 
         return sorted(files, key=sort_key, reverse=True)
     except OSError as e:
-        st.error(f"Gagal membaca direktori sesi: {e}")
+        st.error(f"Gagal membaca direktori sesi untuk pengguna '{username}': {e}")
         return []
 
-def delete_chat_session_file(session_id):
-    filepath = os.path.join(HISTORY_DIR, f"{session_id}.json")
+def delete_chat_session_file(username, session_id):
+    """Memadam fail sesi perbualan untuk pengguna tertentu."""
+    user_history_dir = get_user_history_dir(username)
+    filepath = os.path.join(user_history_dir, f"{session_id}.json")
     try:
         if os.path.exists(filepath):
             os.remove(filepath)
@@ -248,24 +263,41 @@ def delete_chat_session_file(session_id):
         st.error(f"Gagal memadam sesi Perbualan '{session_id}': {e}")
         return False
 
-def delete_all_chat_sessions():
-    deleted_count = 0; errors = []
+def delete_all_chat_sessions(username):
+    """Memadam semua sesi perbualan untuk pengguna tertentu."""
+    user_history_dir = get_user_history_dir(username)
+    deleted_count = 0
+    errors = []
     try:
-        for filename in os.listdir(HISTORY_DIR):
+        if not os.path.exists(user_history_dir):
+            st.info("Tiada sesi Perbualan ditemui untuk pengguna ini.")
+            return True # Dianggap berjaya kerana tiada apa untuk dipadam
+
+        for filename in os.listdir(user_history_dir):
             if filename.endswith(".json"):
-                filepath = os.path.join(HISTORY_DIR, filename)
-                try: os.remove(filepath); deleted_count += 1
-                except OSError as e: errors.append(f"Gagal memadam {filename}: {e}")
+                filepath = os.path.join(user_history_dir, filename)
+                try: 
+                    os.remove(filepath)
+                    deleted_count += 1
+                except OSError as e: 
+                    errors.append(f"Gagal memadam {filename}: {e}")
         if errors:
             for error in errors: st.error(error)
-        if deleted_count > 0: st.success(f"{deleted_count} sesi Perbualan berjaya dipadam.")
-        else: st.info("Tiada sesi Perbualan ditemui untuk dipadam.")
+        if deleted_count > 0: 
+            st.success(f"{deleted_count} sesi Perbualan untuk pengguna '{username}' berjaya dipadam.")
+        else: 
+            st.info(f"Tiada sesi Perbualan ditemui untuk pengguna '{username}' untuk dipadam.")
         return True
     except OSError as e:
-        st.error(f"Gagal mengakses direktori sesi: {e}")
+        st.error(f"Gagal mengakses direktori sesi untuk pengguna '{username}': {e}")
         return False
+# --- TAMAT PERUBAHAN FUNGSI PENGURUSAN SESI ---
+
+# ... (Fungsi extract_text_from_file, format_conversation_text, save_to_word, dll. tidak berubah) ...
+# Pastikan semua fungsi ini masih ada. Saya akan sertakan format_conversation_text dan fungsi eksport yang diubah suai sedikit.
 
 def extract_text_from_file(uploaded_file_obj):
+    # ... (Kod sedia ada anda, tidak berubah) ...
     extracted_text = ""
     filename = uploaded_file_obj.name
     file_bytes = uploaded_file_obj.getvalue() 
@@ -312,6 +344,7 @@ def extract_text_from_file(uploaded_file_obj):
         return None
 
 def format_conversation_text(chat_history, include_user=True, include_assistant=True):
+    # ... (Kod sedia ada anda, tidak berubah) ...
     lines = []
     for msg in chat_history:
         role_display = msg["role"].capitalize()
@@ -327,10 +360,8 @@ def format_conversation_text(chat_history, include_user=True, include_assistant=
                 lines.append(f"  Proses Pemikiran AI:\n  ---------------------\n{thinking_display}\n  ---------------------")
     return "\n\n".join(lines)
 
-# ... (Fungsi save_to_word, save_to_pdf, save_to_txt, save_to_excel, save_to_pptx tidak berubah) ...
-# Pastikan fungsi-fungsi eksport ini masih ada dalam kod anda.
-# Saya akan skip untuk memendekkan respons, tetapi anda perlu pastikan ia ada.
 def save_to_word(text_content, filename='output.docx', logo_path=LOGO_PATH, watermark_text=WATERMARK_TEXT):
+    # ... (Kod sedia ada anda, tidak berubah) ...
     doc = Document()
     if logo_path and os.path.exists(logo_path):
         try:
@@ -356,6 +387,7 @@ def save_to_word(text_content, filename='output.docx', logo_path=LOGO_PATH, wate
     except IOError as e: st.error(f"Gagal menyimpan ke Word: {e}"); return False
 
 def save_to_pdf(text_content, filename='output.pdf', logo_path=LOGO_PATH, watermark_text=WATERMARK_TEXT):
+    # ... (Kod sedia ada anda, tidak berubah) ...
     pdf = FPDF()
     pdf.add_page()
     pdf.set_auto_page_break(auto=True, margin=15)
@@ -373,7 +405,6 @@ def save_to_pdf(text_content, filename='output.pdf', logo_path=LOGO_PATH, waterm
             current_font_family_for_content = UNICODE_FONT_FAMILY
             current_font_family_for_watermark = UNICODE_FONT_FAMILY
             watermark_style = '' 
-            # st.sidebar.info(f"Berjaya memuatkan fon Unicode: {UNICODE_FONT_FAMILY}") 
         except RuntimeError as e:
             st.warning(f"Gagal memuatkan fon Unicode '{FONT_REGULAR_PATH}': {e}. Menggunakan fon lalai '{DEFAULT_FALLBACK_FONT}'.")
     else:
@@ -412,13 +443,14 @@ def save_to_pdf(text_content, filename='output.pdf', logo_path=LOGO_PATH, waterm
         return False
 
 def save_to_txt(text_content, filename='output.txt'):
+    # ... (Kod sedia ada anda, tidak berubah) ...
     try:
         with open(filename, "w", encoding="utf-8") as f: f.write(text_content)
         return True
     except IOError as e: st.error(f"Gagal menyimpan ke Teks: {e}"); return False
 
 def save_to_excel(chat_history, filename='chat_output.xlsx'):
-    # Perlu diubah suai untuk memasukkan 'thinking_process' jika mahu
+    # ... (Kod sedia ada anda, tidak berubah) ...
     data = []
     for msg in chat_history:
         role = msg["role"].capitalize()
@@ -427,7 +459,7 @@ def save_to_excel(chat_history, filename='chat_output.xlsx'):
         if thinking:
             data.append([role, content, thinking])
         else:
-            data.append([role, content, ""]) # Tiada proses pemikiran
+            data.append([role, content, ""]) 
             
     df = pd.DataFrame(data, columns=["Role", "Message", "Thinking Process"])
     try: 
@@ -438,6 +470,7 @@ def save_to_excel(chat_history, filename='chat_output.xlsx'):
         return False
 
 def save_to_pptx(chat_history, filename='chat_output.pptx', logo_path=LOGO_PATH):
+    # ... (Kod sedia ada anda, tidak berubah) ...
     prs = Presentation()
     slide_layout = prs.slide_layouts[6] 
     for msg in chat_history:
@@ -479,13 +512,13 @@ def save_to_pptx(chat_history, filename='chat_output.pptx', logo_path=LOGO_PATH)
             p_thinking_content = tf.add_paragraph()
             p_thinking_content.text = thinking_text
             p_thinking_content.font.size = PptxPt(12)
-            p_thinking_content.level = 2 # Inden lebih dalam
+            p_thinking_content.level = 2 
             
     try: prs.save(filename); return True
     except IOError as e: st.error(f"Gagal menyimpan ke PowerPoint: {e}"); return False
 
-
 def initialize_session_state(available_models_list):
+    # ... (Kod sedia ada anda, tidak berubah) ...
     if "session_id" not in st.session_state:
         st.session_state.session_id = "new"
         st.session_state.chat_history = []
@@ -496,7 +529,7 @@ def initialize_session_state(available_models_list):
         elif available_models_list:
             st.session_state.selected_ollama_model = available_models_list[0]
         else:
-            st.session_state.selected_ollama_model = DEFAULT_OLLAMA_MODEL # Fallback
+            st.session_state.selected_ollama_model = DEFAULT_OLLAMA_MODEL 
     if "show_confirm_delete_all_button" not in st.session_state:
         st.session_state.show_confirm_delete_all_button = False
     if "chat_page_num" not in st.session_state:
@@ -504,8 +537,17 @@ def initialize_session_state(available_models_list):
     if "uploader_key_counter" not in st.session_state:
         st.session_state.uploader_key_counter = 0
 
-def display_sidebar(available_models_list):
+# --- PERUBAHAN PADA FUNGSI UI ---
+def display_sidebar(available_models_list, username): # Tambah username
     with st.sidebar: 
+        # Nama pengguna dan log keluar sudah dipaparkan di main() sebelum panggil display_sidebar
+        # st.markdown(f"#### 👤 Pengguna: {username}") # Boleh alih keluar jika sudah ada di main
+        # if st.button("🚪 Log Keluar", use_container_width=True, key="logout_sidebar_main_app"):
+        #     st.session_state.authenticated = False
+        #     st.session_state.username = None
+        #     st.rerun()
+        # st.markdown("---") # Pembahagi selepas log keluar
+
         st.markdown("## ⚙️ Tetapan & Sesi") 
         st.markdown("---")
         st.markdown("#### Model AI")
@@ -528,7 +570,7 @@ def display_sidebar(available_models_list):
                  st.session_state.selected_ollama_model = DEFAULT_OLLAMA_MODEL
         st.markdown("---")
         st.markdown("#### 💬 Sesi Perbualan")
-        session_ids = load_all_session_ids()
+        session_ids = load_all_session_ids(username) # Guna username
         current_session_for_select = st.session_state.session_id
         options = ["➕ Perbualan Baru"] + session_ids
         try:
@@ -547,23 +589,23 @@ def display_sidebar(available_models_list):
             can_delete_current = st.session_state.session_id != "new" and st.session_state.session_id in session_ids
             if can_delete_current:
                 if st.button(f"Padam Sesi Semasa: {st.session_state.session_id}", key="delete_current_btn", type="secondary", use_container_width=True):
-                    if delete_chat_session_file(st.session_state.session_id):
+                    if delete_chat_session_file(username, st.session_state.session_id): # Guna username
                         st.session_state.session_id = "new"; st.session_state.chat_history = []
                         st.session_state.current_filename_prefix = datetime.now().strftime("%Y%m%d_%H%M%S")
                         st.session_state.show_confirm_delete_all_button = False
                         st.session_state.chat_page_num = 1
                         st.rerun()
-            if session_ids:
+            if session_ids: # Hanya tunjukkan jika ada sesi untuk pengguna ini
                 if not st.session_state.show_confirm_delete_all_button:
-                    if st.button("Padam Semua Sesi", key="ask_delete_all_btn", use_container_width=True):
+                    if st.button("Padam Semua Sesi Saya", key="ask_delete_all_btn", use_container_width=True): # Ubah label
                         st.session_state.show_confirm_delete_all_button = True
                         st.rerun()
                 if st.session_state.show_confirm_delete_all_button:
-                    st.warning("ANDA PASTI MAHU MEMADAM SEMUA SESI?")
+                    st.warning("ANDA PASTI MAHU MEMADAM SEMUA SESI ANDA?") # Ubah label
                     col1, col2 = st.columns(2)
                     with col1:
-                        if st.button("YA, PADAM", key="confirm_delete_all_btn", type="primary", use_container_width=True):
-                            if delete_all_chat_sessions():
+                        if st.button("YA, PADAM SEMUA MILIK SAYA", key="confirm_delete_all_btn", type="primary", use_container_width=True): # Ubah label
+                            if delete_all_chat_sessions(username): # Guna username
                                 st.session_state.session_id = "new"; st.session_state.chat_history = []
                                 st.session_state.current_filename_prefix = datetime.now().strftime("%Y%m%d_%H%M%S")
                                 st.session_state.show_confirm_delete_all_button = False
@@ -578,7 +620,7 @@ def display_sidebar(available_models_list):
                 st.session_state.show_confirm_delete_all_button = False
     return selected_session_id_ui
 
-def handle_session_logic(selected_session_id_from_ui):
+def handle_session_logic(username, selected_session_id_from_ui): # Tambah username
     if selected_session_id_from_ui == "➕ Perbualan Baru":
         if st.session_state.session_id != "new": 
             st.session_state.session_id = "new"
@@ -586,13 +628,13 @@ def handle_session_logic(selected_session_id_from_ui):
             st.session_state.current_filename_prefix = datetime.now().strftime("%Y%m%d_%H%M%S")
             st.session_state.chat_page_num = 1
     elif st.session_state.session_id != selected_session_id_from_ui: 
-        st.session_state.chat_history = load_chat_session(selected_session_id_from_ui)
+        st.session_state.chat_history = load_chat_session(username, selected_session_id_from_ui) # Guna username
         st.session_state.session_id = selected_session_id_from_ui
         st.session_state.current_filename_prefix = selected_session_id_from_ui 
         st.session_state.chat_page_num = 1
 
-# --- PERUBAHAN DI SINI ---
 def display_chat_messages_paginated():
+    # ... (Kod sedia ada anda, tidak berubah) ...
     if not st.session_state.chat_history:
         st.info("💬 Mulakan perbualan dengan menaip di bawah atau muat naik fail untuk analisis.")
         return
@@ -611,21 +653,15 @@ def display_chat_messages_paginated():
 
     for msg in messages_to_display:
         with st.chat_message(msg["role"]):
-            # Paparkan proses pemikiran jika ada
             thinking_process_text = msg.get("thinking_process", "").strip()
             if msg["role"] == "assistant" and thinking_process_text:
                 with st.expander("Tunjukkan Proses Pemikiran AI", expanded=False):
                     st.markdown(thinking_process_text)
-            
-            # Paparkan kandungan utama mesej
             main_content_text = msg.get("content", "").strip()
             if main_content_text:
                 st.markdown(main_content_text)
-            elif not thinking_process_text: # Jika kandungan utama kosong DAN tiada pemikiran
+            elif not thinking_process_text: 
                 st.markdown("*(Tiada respons kandungan)*")
-            # Jika kandungan utama kosong TETAPI ada pemikiran, tidak perlu paparkan apa-apa lagi di sini
-            # kerana pemikiran sudah dalam expander.
-
             if msg["role"] == "assistant" and "time_taken" in msg and msg["time_taken"] is not None:
                 st.caption(f"⏱️ {msg['time_taken']:.2f}s")
 
@@ -644,9 +680,9 @@ def display_chat_messages_paginated():
                 st.rerun() 
     else:
         st.session_state.chat_page_num = 1
-# --- TAMAT PERUBAHAN display_chat_messages_paginated ---
 
 def display_export_options():
+    # ... (Kod sedia ada anda, tidak berubah) ...
     if not st.session_state.chat_history:
         return
     st.markdown("---") 
@@ -688,8 +724,8 @@ def display_export_options():
                 "Word (.docx)": (save_to_word, text_for_common_formats, f"{filename_base}.docx"),
                 "Teks (.txt)": (save_to_txt, text_for_common_formats, f"{filename_base}.txt"),
                 "PDF (.pdf)": (save_to_pdf, text_for_common_formats, f"{filename_base}.pdf"),
-                "Excel (.xlsx)": (save_to_excel, history_for_excel_pptx, f"{filename_base}.xlsx"), # Menggunakan history_for_excel_pptx
-                "PowerPoint (.pptx)": (save_to_pptx, history_for_excel_pptx, f"{filename_base}.pptx") # Menggunakan history_for_excel_pptx
+                "Excel (.xlsx)": (save_to_excel, history_for_excel_pptx, f"{filename_base}.xlsx"), 
+                "PowerPoint (.pptx)": (save_to_pptx, history_for_excel_pptx, f"{filename_base}.pptx") 
             }
             if export_format_choice in actions:
                 func, data_to_export, fname = actions[export_format_choice]
@@ -710,27 +746,49 @@ def display_export_options():
                 except FileNotFoundError: st.error(f"Gagal mencari {exported_filename} untuk dimuat turun.")
                 except Exception as e: st.error(f"Ralat muat turun: {e}")
 
-# --- PERUBAHAN DI SINI ---
+# --- PERUBAHAN PADA FUNGSI main ---
 def main():
     st.set_page_config(page_title="DFK Stembot", layout="wide", initial_sidebar_state="expanded", page_icon="🤖")
     
-    if os.path.exists("ikm_logo.png"):
-        col_logo_space1, col_logo, col_logo_space2 = st.columns([1.6, 2, 1]) 
+    # Paparkan logo (menggunakan LOGO_PATH)
+    if os.path.exists(LOGO_PATH):
+        col_logo_space1, col_logo, col_logo_space2 = st.columns([1.6, 2, 1]) # Laraskan nisbah jika perlu
         with col_logo:
             try:
-                st.image("ikm_logo.png", width=350) 
+                st.image(LOGO_PATH, width=250) # Laraskan saiz jika perlu
             except Exception as e:
                 st.warning(f"Gagal memaparkan logo: {e}")
-    else:
-        st.warning(f"Fail logo tidak ditemui di: {"ikm_logo.png"}")
+    # else: # Tidak perlu warning di sini jika logo adalah pilihan
+    #     st.warning(f"Fail logo tidak ditemui di: {LOGO_PATH}") 
+    
+    # Semak status log masuk
+    if not authentication_ui():
+        return # Hentikan pelaksanaan jika tidak disahkan
+    
+    # Jika disahkan, dapatkan username dari session_state
+    current_username = st.session_state.username
 
+    # Paparkan nama pengguna dan butang log keluar di sidebar
+    with st.sidebar:
+        st.markdown(f"#### 👤 Pengguna: {current_username}")
+        if st.button("🚪 Log Keluar", use_container_width=True, key="main_logout_button"):
+            # Reset state berkaitan sesi pengguna
+            st.session_state.authenticated = False
+            st.session_state.username = None
+            st.session_state.session_id = "new" # Reset ke sesi baru
+            st.session_state.chat_history = []
+            # Anda mungkin mahu reset state lain yang spesifik pengguna di sini
+            st.rerun()
+        st.markdown("---") # Pembahagi selepas log keluar
+
+    # Kod utama chatbot selepas ini
     st.markdown("<h1 style='text-align: center; margin-top: 0px; margin-bottom: 10px;'>🤖 DFK Stembot</h1>", unsafe_allow_html=True)
     
     available_ollama_models = get_ollama_models_cached()
     if not available_ollama_models:
         st.error("Tidak dapat memuatkan senarai model dari Ollama.")
     
-    initialize_session_state(available_ollama_models)
+    initialize_session_state(available_ollama_models) # Inisialisasi state umum
 
     if st.session_state.selected_ollama_model:
         st.markdown(f"<p style='text-align: center; color: grey; margin-bottom: 20px;'>Model Aktif: <b>{st.session_state.selected_ollama_model.split(':')[0]}</b></p>", unsafe_allow_html=True)
@@ -739,11 +797,11 @@ def main():
     
     st.markdown("---")
 
-    selected_session_id_from_ui = display_sidebar(available_ollama_models)
-    handle_session_logic(selected_session_id_from_ui) 
+    selected_session_id_from_ui = display_sidebar(available_ollama_models, current_username) # Hantar username
+    handle_session_logic(current_username, selected_session_id_from_ui) # Hantar username
     
     with st.sidebar:
-        st.markdown("---") 
+        # st.markdown("---") # Pembahagi sudah ada di atas
         st.markdown("#### 📎 Muat Naik & Analisis Fail")
         uploader_key = f"file_uploader_{st.session_state.uploader_key_counter}"
         uploaded_file = st.file_uploader(
@@ -763,28 +821,25 @@ def main():
                 st.session_state.chat_history.append({"role": "user", "content": file_content_message})
                 
                 with st.spinner(f"Menganalisis kandungan fail..."):
-                    # Panggil fungsi yang dikemas kini
                     assistant_response, thinking_text, gen_time = query_ollama_non_stream(
                         file_content_message,
                         st.session_state.chat_history, 
                         st.session_state.selected_ollama_model
                     )
-                # Simpan mesej pembantu dengan thinking_process
                 st.session_state.chat_history.append({
                     "role": "assistant", 
                     "content": assistant_response,
-                    "thinking_process": thinking_text, # Medan baru
+                    "thinking_process": thinking_text,
                     "time_taken": gen_time
                 })
                 if st.session_state.session_id == "new":
                     st.session_state.session_id = st.session_state.current_filename_prefix
-                save_chat_session(st.session_state.session_id, st.session_state.chat_history)
+                save_chat_session(current_username, st.session_state.session_id, st.session_state.chat_history) # Guna username
             
             elif extracted_text is None: 
                 pass 
             else: 
                 st.warning(f"Tiada teks diekstrak dari '{uploaded_file.name}'.")
-
             st.session_state.uploader_key_counter += 1
             st.rerun()
 
@@ -796,26 +851,21 @@ def main():
 
     if user_input:
         st.session_state.chat_history.append({"role": "user", "content": user_input})
-        
         with st.spinner(f"Sedang berfikir..."): 
-            # Panggil fungsi yang dikemas kini
             assistant_response_text, thinking_text, generation_time = query_ollama_non_stream(
                 user_input, 
                 st.session_state.chat_history, 
                 st.session_state.selected_ollama_model
             )
-        
-        # Simpan mesej pembantu dengan thinking_process
         st.session_state.chat_history.append({
             "role": "assistant", 
             "content": assistant_response_text,
-            "thinking_process": thinking_text, # Medan baru
+            "thinking_process": thinking_text,
             "time_taken": generation_time
         })
-
         if st.session_state.session_id == "new":
             st.session_state.session_id = st.session_state.current_filename_prefix
-        save_chat_session(st.session_state.session_id, st.session_state.chat_history)
+        save_chat_session(current_username, st.session_state.session_id, st.session_state.chat_history) # Guna username
         
         total_messages = len(st.session_state.chat_history)
         page_size = 10 
@@ -838,6 +888,6 @@ if __name__ == "__main__":
     # Pillow
     # pytesseract
     # PyMuPDF
-    #
+    # bcrypt
     # Pasang menggunakan: pip install -r requirements.txt
     # Juga, pastikan Tesseract OCR dipasang pada sistem anda.
