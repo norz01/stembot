@@ -20,6 +20,7 @@ import bcrypt
 # --- KONFIGURASI ---
 HISTORY_DIR = "chat_sessions"
 UPLOAD_DIR = "uploaded_files"
+EXPORT_DIR = "exported_files"
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 DEFAULT_OLLAMA_MODEL = os.getenv("DEFAULT_OLLAMA_MODEL", "STEMBot-4B")
 LOGO_PATH = os.getenv("logo_ikm", "logo_ikm.jpg") # PENAMBAHBAIKAN: Guna pembolehubah ini secara konsisten
@@ -30,6 +31,7 @@ USERS_FILE = os.path.join(USERS_DIR, "users.json")
 # Pastikan direktori wujud
 os.makedirs(HISTORY_DIR, exist_ok=True)
 os.makedirs(UPLOAD_DIR, exist_ok=True)
+os.makedirs(EXPORT_DIR, exist_ok=True)
 os.makedirs(USERS_DIR, exist_ok=True)
 
 # --- FUNGSI PENGURUSAN AKAUN ---
@@ -670,53 +672,79 @@ def display_export_options():
                 "Pilih format", "Word (.docx)", "Teks (.txt)", "PDF (.pdf)",
                 "Excel (.xlsx)", "PowerPoint (.pptx)"
             ], key="export_format_select")
+        
         custom_filename_prefix_ui = st.text_input(
             "Nama fail awalan:",
             st.session_state.current_filename_prefix,
             key="filename_prefix_input"
         )
+
         if st.button("📁 Eksport Sekarang", key="export_main_button", type="primary", use_container_width=True):
             if export_format_choice == "Pilih format":
                 st.warning("Sila pilih format eksport."); return
+            
             filename_base = custom_filename_prefix_ui
             include_user = "Pengguna" in export_content_choice or "Keseluruhan" in export_content_choice
             include_assistant = "Pembantu" in export_content_choice or "Keseluruhan" in export_content_choice
+            
             text_for_common_formats = format_conversation_text(st.session_state.chat_history, include_user, include_assistant)
             history_for_excel_pptx = [
                 msg for msg in st.session_state.chat_history
                 if (include_user and msg["role"] == "user") or 
                    (include_assistant and msg["role"] == "assistant")
             ]
+
             if not history_for_excel_pptx and (export_format_choice in ["Excel (.xlsx)", "PowerPoint (.pptx)"]):
                 st.warning(f"Tiada mesej '{export_content_choice.lower().replace(' keseluruhan perbualan', '')}' untuk dieksport.")
                 return
-            success, exported_filename = False, ""
+
+            success, exported_filepath = False, ""
+            
+            # --- PERUBAHAN DI SINI ---
+            # Bina nama fail dan laluan penuh
+            def get_full_path(extension):
+                # Bina nama fail sahaja dahulu
+                file_name_only = f"{filename_base}.{extension}"
+                # Gabungkan dengan direktori eksport untuk mendapatkan laluan penuh
+                return os.path.join(EXPORT_DIR, file_name_only), file_name_only
+
             actions = {
-                "Word (.docx)": (save_to_word, text_for_common_formats, f"{filename_base}.docx"),
-                "Teks (.txt)": (save_to_txt, text_for_common_formats, f"{filename_base}.txt"),
-                "PDF (.pdf)": (save_to_pdf, text_for_common_formats, f"{filename_base}.pdf"),
-                "Excel (.xlsx)": (save_to_excel, history_for_excel_pptx, f"{filename_base}.xlsx"),
-                "PowerPoint (.pptx)": (save_to_pptx, history_for_excel_pptx, f"{filename_base}.pptx")
+                "Word (.docx)": (save_to_word, text_for_common_formats, get_full_path("docx")),
+                "Teks (.txt)": (save_to_txt, text_for_common_formats, get_full_path("txt")),
+                "PDF (.pdf)": (save_to_pdf, text_for_common_formats, get_full_path("pdf")),
+                "Excel (.xlsx)": (save_to_excel, history_for_excel_pptx, get_full_path("xlsx")),
+                "PowerPoint (.pptx)": (save_to_pptx, history_for_excel_pptx, get_full_path("pptx"))
             }
+
             if export_format_choice in actions:
-                func, data_to_export, fname = actions[export_format_choice]
+                func, data_to_export, (full_path, file_name) = actions[export_format_choice]
+                
                 if not data_to_export:
                     st.warning(f"Tiada kandungan untuk dieksport ke {export_format_choice}.")
                     return
-                success = func(data_to_export, fname)
-                exported_filename = fname
-            if success and exported_filename:
-                st.success(f"Fail disimpan: {exported_filename}")
+
+                # Hantar laluan penuh ke fungsi simpan
+                success = func(data_to_export, full_path) 
+                if success:
+                    exported_filepath = full_path
+                    exported_filename_only = file_name
+            
+            if success and exported_filepath:
+                # Paparkan laluan penuh di mana fail disimpan
+                st.success(f"Fail disimpan di: {exported_filepath}")
                 try:
-                    with open(exported_filename, "rb") as f_download:
+                    # Buka fail menggunakan laluan penuh
+                    with open(exported_filepath, "rb") as f_download:
                         st.download_button(
-                            "📥 Muat Turun", data=f_download, file_name=exported_filename,
-                            # PEMBETULAN: replace() memerlukan 2 argumen
-                            key=f"download_btn_{exported_filename.replace('.', '_')}_{time.time()}",
+                            "📥 Muat Turun", 
+                            data=f_download, 
+                            # Gunakan nama fail sahaja untuk butang muat turun
+                            file_name=exported_filename_only, 
+                            key=f"download_btn_{exported_filename_only.replace('.', '_')}_{time.time()}",
                             use_container_width=True
                         )
                 except FileNotFoundError: 
-                    st.error(f"Gagal mencari {exported_filename} untuk dimuat turun.")
+                    st.error(f"Gagal mencari {exported_filepath} untuk dimuat turun.")
                 except Exception as e: 
                     st.error(f"Ralat muat turun: {e}")
 
