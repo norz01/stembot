@@ -18,21 +18,21 @@ import fitz
 import bcrypt
 
 # --- KONFIGURASI ---
-HISTORY_DIR = "chat_sessions"  # Direktori utama untuk semua sesi pengguna
+HISTORY_DIR = "chat_sessions"
 UPLOAD_DIR = "uploaded_files"
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-DEFAULT_OLLAMA_MODEL = os.getenv("DEFAULT_OLLAMA_MODEL", "STEMBot-4B") # Pastikan model ini wujud
-LOGO_PATH = os.getenv("logo_ikm", "logo_ikm.jpg") # Guna pembolehubah ini
+DEFAULT_OLLAMA_MODEL = os.getenv("DEFAULT_OLLAMA_MODEL", "STEMBot-4B")
+LOGO_PATH = os.getenv("logo_ikm", "logo_ikm.jpg") # PENAMBAHBAIKAN: Guna pembolehubah ini secara konsisten
 WATERMARK_TEXT = os.getenv("CHATBOT_WATERMARK_TEXT", "IKM Besut")
 USERS_DIR = "user_data"
 USERS_FILE = os.path.join(USERS_DIR, "users.json")
 
 # Pastikan direktori wujud
-os.makedirs(HISTORY_DIR, exist_ok=True) # Hanya direktori utama
+os.makedirs(HISTORY_DIR, exist_ok=True)
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(USERS_DIR, exist_ok=True)
 
-# --- FUNGSI PENGURUSAN AKAUN (Tidak Berubah) ---
+# --- FUNGSI PENGURUSAN AKAUN ---
 def load_users():
     if not os.path.exists(USERS_FILE):
         with open(USERS_FILE, "w") as f:
@@ -50,12 +50,12 @@ def hash_password(password):
 def verify_password(password, hashed):
     return bcrypt.checkpw(password.encode(), hashed.encode())
 
-# --- HALAMAN LOGIN & PENDAFTARAN (Tidak Berubah) ---
+# --- HALAMAN LOGIN & PENDAFTARAN ---
 def login_page():
     st.title("🔐 Log Masuk")
     username = st.text_input("Nama Pengguna", key="login_username")
     password = st.text_input("Kata Laluan", type="password", key="login_password")
-    
+
     if st.button("Log Masuk", type="primary", use_container_width=True):
         users = load_users()
         if username in users and verify_password(password, users[username]["password"]):
@@ -71,7 +71,7 @@ def register_page():
     username = st.text_input("Nama Pengguna Baru", key="register_username")
     password = st.text_input("Kata Laluan", type="password", key="register_password")
     confirm_password = st.text_input("Sahkan Kata Laluan", type="password", key="confirm_password")
-    
+
     if st.button("Daftar", type="primary", use_container_width=True):
         if not username or not password:
             st.warning("Sila lengkapkan semua medan.")
@@ -89,13 +89,12 @@ def register_page():
         }
         save_users(users)
         st.success("Akaun berjaya didaftarkan! Sila log masuk.")
-        # st.session_state.show_register = False # Tidak perlu jika guna tabs
         st.rerun()
 
 def authentication_ui():
     if "authenticated" not in st.session_state:
         st.session_state.authenticated = False
-    
+
     if not st.session_state.authenticated:
         st.markdown("## Selamat Datang ke DFK Stembot")
         tab1, tab2 = st.tabs(["Log Masuk", "Daftar Akaun"])
@@ -117,10 +116,8 @@ def get_ollama_models_cached():
             return []
         return sorted([model['name'] for model in models_data])
     except requests.exceptions.RequestException:
-        # st.error("Gagal menyambung ke Ollama untuk mendapatkan senarai model.")
         return []
-    except Exception: # Tangkap semua yang lain
-        # st.error("Ralat tidak dijangka semasa mendapatkan senarai model.")
+    except Exception:
         return []
 
 def query_ollama_non_stream(prompt, chat_history, selected_model):
@@ -129,7 +126,7 @@ def query_ollama_non_stream(prompt, chat_history, selected_model):
     if messages_for_api and messages_for_api[-1]["role"] == "user" and messages_for_api[-1]["content"] == prompt:
         is_prompt_already_last_user_message = True
     if not is_prompt_already_last_user_message:
-         messages_for_api.append({"role": "user", "content": prompt})
+        messages_for_api.append({"role": "user", "content": prompt})
 
     start_time = time.time()
     thinking_process = "" 
@@ -145,7 +142,7 @@ def query_ollama_non_stream(prompt, chat_history, selected_model):
             assistant_reply = raw_assistant_reply
         else:
             assistant_reply = raw_assistant_reply
-        thinking_start_tag = "<think>" # Tag pemikiran anda
+        thinking_start_tag = "<think>"
         thinking_end_tag = "</think>"
         if thinking_start_tag in raw_assistant_reply and thinking_end_tag in raw_assistant_reply:
             try:
@@ -198,15 +195,13 @@ def query_ollama_non_stream(prompt, chat_history, selected_model):
         st.error(f"Ralat tidak dijangka dalam query_ollama_non_stream: {e} (selepas {processing_time:.2f}s)")
         return "Maaf, ralat tidak dijangka berlaku semasa memproses permintaan.", "", processing_time
 
-# --- PERUBAHAN PADA FUNGSI PENGURUSAN SESI ---
+# --- FUNGSI PENGURUSAN SESI (DIPERBAIKI) ---
 def get_user_history_dir(username):
-    """Mendapatkan direktori sejarah untuk pengguna tertentu."""
     user_dir = os.path.join(HISTORY_DIR, username)
-    os.makedirs(user_dir, exist_ok=True) # Pastikan direktori pengguna wujud
+    os.makedirs(user_dir, exist_ok=True)
     return user_dir
 
 def save_chat_session(username, session_id, history):
-    """Menyimpan sesi perbualan untuk pengguna tertentu."""
     user_history_dir = get_user_history_dir(username)
     filepath = os.path.join(user_history_dir, f"{session_id}.json")
     try:
@@ -216,7 +211,6 @@ def save_chat_session(username, session_id, history):
         st.error(f"Gagal menyimpan sesi Perbualan '{session_id}' untuk pengguna '{username}': {e}")
 
 def load_chat_session(username, session_id):
-    """Memuatkan sesi perbualan untuk pengguna tertentu."""
     user_history_dir = get_user_history_dir(username)
     filepath = os.path.join(user_history_dir, f"{session_id}.json")
     try:
@@ -229,26 +223,26 @@ def load_chat_session(username, session_id):
         return []
 
 def load_all_session_ids(username):
-    """Memuatkan semua ID sesi untuk pengguna tertentu."""
     user_history_dir = get_user_history_dir(username)
     try:
-        if not os.path.exists(user_history_dir): # Jika pengguna belum ada sesi
+        if not os.path.exists(user_history_dir):
             return []
         files = [f.replace(".json", "") for f in os.listdir(user_history_dir) if f.endswith(".json")]
         def sort_key(filename):
             try:
+                # PEMBETULAN: Menggunakan split('_') dan format yang betul
                 parts = filename.split('_')
                 if len(parts) >= 2:
                     return datetime.strptime(f"{parts[0]}_{parts[1]}", "%Y%m%d_%H%M%S")
-            except (ValueError, IndexError): pass
-            return datetime.min 
+            except (ValueError, IndexError): 
+                pass
+            return datetime.min
         return sorted(files, key=sort_key, reverse=True)
     except OSError as e:
         st.error(f"Gagal membaca direktori sesi untuk pengguna '{username}': {e}")
         return []
 
 def delete_chat_session_file(username, session_id):
-    """Memadam fail sesi perbualan untuk pengguna tertentu."""
     user_history_dir = get_user_history_dir(username)
     filepath = os.path.join(user_history_dir, f"{session_id}.json")
     try:
@@ -264,15 +258,13 @@ def delete_chat_session_file(username, session_id):
         return False
 
 def delete_all_chat_sessions(username):
-    """Memadam semua sesi perbualan untuk pengguna tertentu."""
     user_history_dir = get_user_history_dir(username)
     deleted_count = 0
     errors = []
     try:
         if not os.path.exists(user_history_dir):
             st.info("Tiada sesi Perbualan ditemui untuk pengguna ini.")
-            return True # Dianggap berjaya kerana tiada apa untuk dipadam
-
+            return True
         for filename in os.listdir(user_history_dir):
             if filename.endswith(".json"):
                 filepath = os.path.join(user_history_dir, filename)
@@ -291,27 +283,23 @@ def delete_all_chat_sessions(username):
     except OSError as e:
         st.error(f"Gagal mengakses direktori sesi untuk pengguna '{username}': {e}")
         return False
-# --- TAMAT PERUBAHAN FUNGSI PENGURUSAN SESI ---
 
-# ... (Fungsi extract_text_from_file, format_conversation_text, save_to_word, dll. tidak berubah) ...
-# Pastikan semua fungsi ini masih ada. Saya akan sertakan format_conversation_text dan fungsi eksport yang diubah suai sedikit.
-
+# --- FUNGSI EKSPORT & LAIN-LAIN ---
 def extract_text_from_file(uploaded_file_obj):
-    # ... (Kod sedia ada anda, tidak berubah) ...
     extracted_text = ""
     filename = uploaded_file_obj.name
-    file_bytes = uploaded_file_obj.getvalue() 
-    temp_docx_path = None 
+    file_bytes = uploaded_file_obj.getvalue()
+    temp_docx_path = None
     try:
         if filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif')):
-            image = Image.open(uploaded_file_obj) 
+            image = Image.open(uploaded_file_obj)
             extracted_text = pytesseract.image_to_string(image)
             if not extracted_text.strip():
-                 st.info(f"Tiada teks dapat diekstrak dari imej '{filename}' menggunakan OCR.")
+                st.info(f"Tiada teks dapat diekstrak dari imej '{filename}' menggunakan OCR.")
         elif filename.lower().endswith(".txt"):
             extracted_text = file_bytes.decode('utf-8', errors='ignore')
         elif filename.lower().endswith(".docx"):
-            temp_docx_path = os.path.join(UPLOAD_DIR, f"temp_{filename}") 
+            temp_docx_path = os.path.join(UPLOAD_DIR, f"temp_{filename}")
             try:
                 with open(temp_docx_path, "wb") as f:
                     f.write(file_bytes)
@@ -320,7 +308,7 @@ def extract_text_from_file(uploaded_file_obj):
             except Exception as e_docx:
                 st.error(f"Ralat semasa memproses fail DOCX '{filename}': {e_docx}")
             finally:
-                if temp_docx_path and os.path.exists(temp_docx_path): 
+                if temp_docx_path and os.path.exists(temp_docx_path):
                     try:
                         os.remove(temp_docx_path)
                     except OSError as e_remove:
@@ -332,11 +320,11 @@ def extract_text_from_file(uploaded_file_obj):
             doc.close()
         else:
             st.warning(f"Jenis fail '{filename}' tidak disokong untuk ekstraksi teks.")
-            return None 
+            return None
         return extracted_text.strip() if isinstance(extracted_text, str) else None
     except Exception as e:
         st.error(f"Ralat umum semasa memproses fail '{filename}': {e}")
-        if temp_docx_path and os.path.exists(temp_docx_path): 
+        if temp_docx_path and os.path.exists(temp_docx_path):
             try:
                 os.remove(temp_docx_path)
             except OSError as e_remove_outer:
@@ -344,13 +332,11 @@ def extract_text_from_file(uploaded_file_obj):
         return None
 
 def format_conversation_text(chat_history, include_user=True, include_assistant=True):
-    # ... (Kod sedia ada anda, tidak berubah) ...
     lines = []
     for msg in chat_history:
         role_display = msg["role"].capitalize()
         content_display = msg.get("content", "").strip()
         thinking_display = msg.get("thinking_process", "").strip()
-
         if (msg["role"] == "user" and include_user):
             lines.append(f"{role_display}: {content_display}")
         elif (msg["role"] == "assistant" and include_assistant):
@@ -361,33 +347,35 @@ def format_conversation_text(chat_history, include_user=True, include_assistant=
     return "\n\n".join(lines)
 
 def save_to_word(text_content, filename='output.docx', logo_path=LOGO_PATH, watermark_text=WATERMARK_TEXT):
-    # ... (Kod sedia ada anda, tidak berubah) ...
     doc = Document()
     if logo_path and os.path.exists(logo_path):
         try:
             paragraph = doc.add_paragraph()
             run = paragraph.add_run()
-            run.add_picture(logo_path, width=DocxInches(2.0)) 
+            run.add_picture(logo_path, width=DocxInches(2.0))
             paragraph.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
-            doc.add_paragraph() 
+            doc.add_paragraph()
         except Exception as e:
             st.warning(f"Gagal menambah logo pada Word: {e}. Pastikan fail imej sah.")
     if watermark_text:
         watermark_para = doc.add_paragraph()
         run = watermark_para.add_run(watermark_text)
         font = run.font
-        font.size = DocxPt(36) 
-        font.color.rgb = DocxRGBColor(192, 192, 192)  
+        font.size = DocxPt(36)
+        font.color.rgb = DocxRGBColor(192, 192, 192)
         font.bold = True
         watermark_para.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
         doc.add_paragraph()
     for para_block in text_content.split("\n\n"):
         doc.add_paragraph(para_block.strip())
-    try: doc.save(filename); return True
-    except IOError as e: st.error(f"Gagal menyimpan ke Word: {e}"); return False
+    try: 
+        doc.save(filename)
+        return True
+    except IOError as e: 
+        st.error(f"Gagal menyimpan ke Word: {e}")
+        return False
 
 def save_to_pdf(text_content, filename='output.pdf', logo_path=LOGO_PATH, watermark_text=WATERMARK_TEXT):
-    # ... (Kod sedia ada anda, tidak berubah) ...
     pdf = FPDF()
     pdf.add_page()
     pdf.set_auto_page_break(auto=True, margin=15)
@@ -404,37 +392,37 @@ def save_to_pdf(text_content, filename='output.pdf', logo_path=LOGO_PATH, waterm
             pdf.add_font(UNICODE_FONT_FAMILY, '', FONT_REGULAR_PATH, uni=True)
             current_font_family_for_content = UNICODE_FONT_FAMILY
             current_font_family_for_watermark = UNICODE_FONT_FAMILY
-            watermark_style = '' 
+            watermark_style = ''
         except RuntimeError as e:
             st.warning(f"Gagal memuatkan fon Unicode '{FONT_REGULAR_PATH}': {e}. Menggunakan fon lalai '{DEFAULT_FALLBACK_FONT}'.")
     else:
         st.warning(f"Fail fon Unicode '{FONT_REGULAR_PATH}' tidak ditemui. Menggunakan fon lalai '{DEFAULT_FALLBACK_FONT}'. Pastikan fail fon ada dalam direktori '{FONT_DIR}'.")
     if logo_path and os.path.exists(logo_path):
         try:
-            img_width = 30 
+            img_width = 30
             page_width = pdf.w - 2 * pdf.l_margin
             x_logo = (page_width - img_width) / 2 + pdf.l_margin
             pdf.image(logo_path, x=x_logo, y=10, w=img_width)
-            pdf.ln(25) 
+            pdf.ln(25)
         except Exception as e:
             st.warning(f"Gagal menambah logo pada PDF: {e}. Pastikan fail imej sah dan format disokong oleh FPDF (PNG, JPG, GIF).")
     y_before_watermark = pdf.get_y()
     if watermark_text:
         pdf.set_font(current_font_family_for_watermark, style=watermark_style, size=30)
-        pdf.set_text_color(220, 220, 220) 
-        text_w = pdf.get_string_width(watermark_text) 
+        pdf.set_text_color(220, 220, 220)
+        text_w = pdf.get_string_width(watermark_text)
         page_center_x = pdf.w / 2
         page_center_y = pdf.h / 2
-        pdf.set_xy(page_center_x - (text_w / 2), page_center_y - 5) 
+        pdf.set_xy(page_center_x - (text_w / 2), page_center_y - 5)
         pdf.cell(text_w, 10, watermark_text, 0, 0, 'C')
-        pdf.set_text_color(0, 0, 0) 
+        pdf.set_text_color(0, 0, 0)
         pdf.set_xy(pdf.l_margin, y_before_watermark)
-        if not (logo_path and os.path.exists(logo_path)): 
+        if not (logo_path and os.path.exists(logo_path)):
             pdf.ln(5)
     pdf.set_font(current_font_family_for_content, size=12)
     for para_block in text_content.split("\n\n"):
         pdf.multi_cell(0, 10, para_block.strip())
-        pdf.ln(5) 
+        pdf.ln(5)
     try:
         pdf.output(filename)
         return True
@@ -443,14 +431,15 @@ def save_to_pdf(text_content, filename='output.pdf', logo_path=LOGO_PATH, waterm
         return False
 
 def save_to_txt(text_content, filename='output.txt'):
-    # ... (Kod sedia ada anda, tidak berubah) ...
     try:
-        with open(filename, "w", encoding="utf-8") as f: f.write(text_content)
+        with open(filename, "w", encoding="utf-8") as f: 
+            f.write(text_content)
         return True
-    except IOError as e: st.error(f"Gagal menyimpan ke Teks: {e}"); return False
+    except IOError as e: 
+        st.error(f"Gagal menyimpan ke Teks: {e}")
+        return False
 
 def save_to_excel(chat_history, filename='chat_output.xlsx'):
-    # ... (Kod sedia ada anda, tidak berubah) ...
     data = []
     for msg in chat_history:
         role = msg["role"].capitalize()
@@ -459,8 +448,7 @@ def save_to_excel(chat_history, filename='chat_output.xlsx'):
         if thinking:
             data.append([role, content, thinking])
         else:
-            data.append([role, content, ""]) 
-            
+            data.append([role, content, ""])
     df = pd.DataFrame(data, columns=["Role", "Message", "Thinking Process"])
     try: 
         df.to_excel(filename, index=False, engine='openpyxl')
@@ -470,16 +458,15 @@ def save_to_excel(chat_history, filename='chat_output.xlsx'):
         return False
 
 def save_to_pptx(chat_history, filename='chat_output.pptx', logo_path=LOGO_PATH):
-    # ... (Kod sedia ada anda, tidak berubah) ...
     prs = Presentation()
-    slide_layout = prs.slide_layouts[6] 
+    slide_layout = prs.slide_layouts[6]
     for msg in chat_history:
         slide = prs.slides.add_slide(slide_layout)
         if logo_path and os.path.exists(logo_path):
             try:
-                pic = slide.shapes.add_picture(logo_path, PptxInches(0.2), PptxInches(0.2), height=PptxInches(0.75))
+                slide.shapes.add_picture(logo_path, PptxInches(0.2), PptxInches(0.2), height=PptxInches(0.75))
             except Exception as e:
-                 st.warning(f"Gagal menambah logo pada PowerPoint: {e}. Pastikan fail imej sah.")
+                st.warning(f"Gagal menambah logo pada PowerPoint: {e}. Pastikan fail imej sah.")
         left = PptxInches(0.5)
         top = PptxInches(1.0) if logo_path and os.path.exists(logo_path) else PptxInches(0.5)
         width = PptxInches(9.0)
@@ -492,33 +479,32 @@ def save_to_pptx(chat_history, filename='chat_output.pptx', logo_path=LOGO_PATH)
         p_role.font.bold = True
         p_role.font.size = PptxPt(18)
         p_role.font.name = 'Arial'
-        
         content_text = msg.get("content", "")
         thinking_text = msg.get("thinking_process", "")
-
         p_content = tf.add_paragraph()
         p_content.text = content_text
         p_content.font.size = PptxPt(16)
         p_content.font.name = 'Arial'
         p_content.level = 1 
-
         if thinking_text:
             p_thinking_header = tf.add_paragraph()
             run_thinking_header = p_thinking_header.add_run()
             run_thinking_header.text = "Proses Pemikiran AI:"
             run_thinking_header.font.italic = True
             run_thinking_header.font.size = PptxPt(14)
-            
             p_thinking_content = tf.add_paragraph()
             p_thinking_content.text = thinking_text
             p_thinking_content.font.size = PptxPt(12)
             p_thinking_content.level = 2 
-            
-    try: prs.save(filename); return True
-    except IOError as e: st.error(f"Gagal menyimpan ke PowerPoint: {e}"); return False
+    # PEMBETULAN: Blok try/except untuk menyimpan fail hilang
+    try: 
+        prs.save(filename)
+        return True
+    except IOError as e: 
+        st.error(f"Gagal menyimpan ke PowerPoint: {e}")
+        return False
 
 def initialize_session_state(available_models_list):
-    # ... (Kod sedia ada anda, tidak berubah) ...
     if "session_id" not in st.session_state:
         st.session_state.session_id = "new"
         st.session_state.chat_history = []
@@ -529,7 +515,7 @@ def initialize_session_state(available_models_list):
         elif available_models_list:
             st.session_state.selected_ollama_model = available_models_list[0]
         else:
-            st.session_state.selected_ollama_model = DEFAULT_OLLAMA_MODEL 
+            st.session_state.selected_ollama_model = DEFAULT_OLLAMA_MODEL
     if "show_confirm_delete_all_button" not in st.session_state:
         st.session_state.show_confirm_delete_all_button = False
     if "chat_page_num" not in st.session_state:
@@ -537,17 +523,9 @@ def initialize_session_state(available_models_list):
     if "uploader_key_counter" not in st.session_state:
         st.session_state.uploader_key_counter = 0
 
-# --- PERUBAHAN PADA FUNGSI UI ---
-def display_sidebar(available_models_list, username): # Tambah username
-    with st.sidebar: 
-        # Nama pengguna dan log keluar sudah dipaparkan di main() sebelum panggil display_sidebar
-        # st.markdown(f"#### 👤 Pengguna: {username}") # Boleh alih keluar jika sudah ada di main
-        # if st.button("🚪 Log Keluar", use_container_width=True, key="logout_sidebar_main_app"):
-        #     st.session_state.authenticated = False
-        #     st.session_state.username = None
-        #     st.rerun()
-        # st.markdown("---") # Pembahagi selepas log keluar
-
+# --- FUNGSI UI (DIPERBAIKI) ---
+def display_sidebar(available_models_list, username):
+    with st.sidebar:
         st.markdown("## ⚙️ Tetapan & Sesi") 
         st.markdown("---")
         st.markdown("#### Model AI")
@@ -570,7 +548,7 @@ def display_sidebar(available_models_list, username): # Tambah username
                  st.session_state.selected_ollama_model = DEFAULT_OLLAMA_MODEL
         st.markdown("---")
         st.markdown("#### 💬 Sesi Perbualan")
-        session_ids = load_all_session_ids(username) # Guna username
+        session_ids = load_all_session_ids(username)
         current_session_for_select = st.session_state.session_id
         options = ["➕ Perbualan Baru"] + session_ids
         try:
@@ -589,23 +567,23 @@ def display_sidebar(available_models_list, username): # Tambah username
             can_delete_current = st.session_state.session_id != "new" and st.session_state.session_id in session_ids
             if can_delete_current:
                 if st.button(f"Padam Sesi Semasa: {st.session_state.session_id}", key="delete_current_btn", type="secondary", use_container_width=True):
-                    if delete_chat_session_file(username, st.session_state.session_id): # Guna username
+                    if delete_chat_session_file(username, st.session_state.session_id):
                         st.session_state.session_id = "new"; st.session_state.chat_history = []
                         st.session_state.current_filename_prefix = datetime.now().strftime("%Y%m%d_%H%M%S")
                         st.session_state.show_confirm_delete_all_button = False
                         st.session_state.chat_page_num = 1
                         st.rerun()
-            if session_ids: # Hanya tunjukkan jika ada sesi untuk pengguna ini
+            if session_ids:
                 if not st.session_state.show_confirm_delete_all_button:
-                    if st.button("Padam Semua Sesi Saya", key="ask_delete_all_btn", use_container_width=True): # Ubah label
+                    if st.button("Padam Semua Sesi Saya", key="ask_delete_all_btn", use_container_width=True):
                         st.session_state.show_confirm_delete_all_button = True
                         st.rerun()
                 if st.session_state.show_confirm_delete_all_button:
-                    st.warning("ANDA PASTI MAHU MEMADAM SEMUA SESI ANDA?") # Ubah label
+                    st.warning("ANDA PASTI MAHU MEMADAM SEMUA SESI ANDA?")
                     col1, col2 = st.columns(2)
                     with col1:
-                        if st.button("YA, PADAM SEMUA MILIK SAYA", key="confirm_delete_all_btn", type="primary", use_container_width=True): # Ubah label
-                            if delete_all_chat_sessions(username): # Guna username
+                        if st.button("YA, PADAM SEMUA MILIK SAYA", key="confirm_delete_all_btn", type="primary", use_container_width=True):
+                            if delete_all_chat_sessions(username):
                                 st.session_state.session_id = "new"; st.session_state.chat_history = []
                                 st.session_state.current_filename_prefix = datetime.now().strftime("%Y%m%d_%H%M%S")
                                 st.session_state.show_confirm_delete_all_button = False
@@ -620,37 +598,32 @@ def display_sidebar(available_models_list, username): # Tambah username
                 st.session_state.show_confirm_delete_all_button = False
     return selected_session_id_ui
 
-def handle_session_logic(username, selected_session_id_from_ui): # Tambah username
+def handle_session_logic(username, selected_session_id_from_ui):
     if selected_session_id_from_ui == "➕ Perbualan Baru":
-        if st.session_state.session_id != "new": 
+        if st.session_state.session_id != "new":
             st.session_state.session_id = "new"
             st.session_state.chat_history = []
             st.session_state.current_filename_prefix = datetime.now().strftime("%Y%m%d_%H%M%S")
             st.session_state.chat_page_num = 1
-    elif st.session_state.session_id != selected_session_id_from_ui: 
-        st.session_state.chat_history = load_chat_session(username, selected_session_id_from_ui) # Guna username
+    elif st.session_state.session_id != selected_session_id_from_ui:
+        st.session_state.chat_history = load_chat_session(username, selected_session_id_from_ui)
         st.session_state.session_id = selected_session_id_from_ui
-        st.session_state.current_filename_prefix = selected_session_id_from_ui 
+        st.session_state.current_filename_prefix = selected_session_id_from_ui
         st.session_state.chat_page_num = 1
 
 def display_chat_messages_paginated():
-    # ... (Kod sedia ada anda, tidak berubah) ...
     if not st.session_state.chat_history:
         st.info("💬 Mulakan perbualan dengan menaip di bawah atau muat naik fail untuk analisis.")
         return
-
     page_size = 10
     total_messages = len(st.session_state.chat_history)
     max_page = (total_messages + page_size - 1) // page_size if total_messages > 0 else 1
-    
     if st.session_state.chat_page_num > max_page: st.session_state.chat_page_num = max_page
     if st.session_state.chat_page_num < 1: st.session_state.chat_page_num = 1
-    
     reversed_history = st.session_state.chat_history[::-1]
     start_index = (st.session_state.chat_page_num - 1) * page_size
     end_index = start_index + page_size
     messages_to_display = reversed_history[start_index:end_index][::-1] 
-
     for msg in messages_to_display:
         with st.chat_message(msg["role"]):
             thinking_process_text = msg.get("thinking_process", "").strip()
@@ -664,7 +637,6 @@ def display_chat_messages_paginated():
                 st.markdown("*(Tiada respons kandungan)*")
             if msg["role"] == "assistant" and "time_taken" in msg and msg["time_taken"] is not None:
                 st.caption(f"⏱️ {msg['time_taken']:.2f}s")
-
     if max_page > 1:
         cols_pagination = st.columns([1, 3, 1]) 
         with cols_pagination[1]:
@@ -682,11 +654,10 @@ def display_chat_messages_paginated():
         st.session_state.chat_page_num = 1
 
 def display_export_options():
-    # ... (Kod sedia ada anda, tidak berubah) ...
     if not st.session_state.chat_history:
         return
-    st.markdown("---") 
-    with st.expander("📤 Eksport Perbualan", expanded=False): 
+    st.markdown("---")
+    with st.expander("📤 Eksport Perbualan", expanded=False):
         col_export1, col_export2 = st.columns(2)
         with col_export1:
             export_content_choice = st.radio(
@@ -707,13 +678,13 @@ def display_export_options():
         if st.button("📁 Eksport Sekarang", key="export_main_button", type="primary", use_container_width=True):
             if export_format_choice == "Pilih format":
                 st.warning("Sila pilih format eksport."); return
-            filename_base = custom_filename_prefix_ui 
+            filename_base = custom_filename_prefix_ui
             include_user = "Pengguna" in export_content_choice or "Keseluruhan" in export_content_choice
             include_assistant = "Pembantu" in export_content_choice or "Keseluruhan" in export_content_choice
             text_for_common_formats = format_conversation_text(st.session_state.chat_history, include_user, include_assistant)
             history_for_excel_pptx = [
-                msg for msg in st.session_state.chat_history 
-                if (include_user and msg["role"] == "user") or \
+                msg for msg in st.session_state.chat_history
+                if (include_user and msg["role"] == "user") or 
                    (include_assistant and msg["role"] == "assistant")
             ]
             if not history_for_excel_pptx and (export_format_choice in ["Excel (.xlsx)", "PowerPoint (.pptx)"]):
@@ -724,14 +695,14 @@ def display_export_options():
                 "Word (.docx)": (save_to_word, text_for_common_formats, f"{filename_base}.docx"),
                 "Teks (.txt)": (save_to_txt, text_for_common_formats, f"{filename_base}.txt"),
                 "PDF (.pdf)": (save_to_pdf, text_for_common_formats, f"{filename_base}.pdf"),
-                "Excel (.xlsx)": (save_to_excel, history_for_excel_pptx, f"{filename_base}.xlsx"), 
-                "PowerPoint (.pptx)": (save_to_pptx, history_for_excel_pptx, f"{filename_base}.pptx") 
+                "Excel (.xlsx)": (save_to_excel, history_for_excel_pptx, f"{filename_base}.xlsx"),
+                "PowerPoint (.pptx)": (save_to_pptx, history_for_excel_pptx, f"{filename_base}.pptx")
             }
             if export_format_choice in actions:
                 func, data_to_export, fname = actions[export_format_choice]
                 if not data_to_export:
-                     st.warning(f"Tiada kandungan untuk dieksport ke {export_format_choice}.")
-                     return
+                    st.warning(f"Tiada kandungan untuk dieksport ke {export_format_choice}.")
+                    return
                 success = func(data_to_export, fname)
                 exported_filename = fname
             if success and exported_filename:
@@ -739,69 +710,63 @@ def display_export_options():
                 try:
                     with open(exported_filename, "rb") as f_download:
                         st.download_button(
-                            "📥 Muat Turun", data=f_download, file_name=exported_filename, 
+                            "📥 Muat Turun", data=f_download, file_name=exported_filename,
+                            # PEMBETULAN: replace() memerlukan 2 argumen
                             key=f"download_btn_{exported_filename.replace('.', '_')}_{time.time()}",
                             use_container_width=True
                         )
-                except FileNotFoundError: st.error(f"Gagal mencari {exported_filename} untuk dimuat turun.")
-                except Exception as e: st.error(f"Ralat muat turun: {e}")
+                except FileNotFoundError: 
+                    st.error(f"Gagal mencari {exported_filename} untuk dimuat turun.")
+                except Exception as e: 
+                    st.error(f"Ralat muat turun: {e}")
 
-# --- PERUBAHAN PADA FUNGSI main ---
+# --- FUNGSI UTAMA (DIPERBAIKI) ---
 def main():
     st.set_page_config(page_title="DFK Stembot", layout="wide", initial_sidebar_state="expanded", page_icon="🤖")
-    
+
     # Paparkan logo (menggunakan LOGO_PATH)
     if os.path.exists(LOGO_PATH):
-        col_logo_space1, col_logo, col_logo_space2 = st.columns([1.6, 2, 1]) # Laraskan nisbah jika perlu
+        col_logo_space1, col_logo, col_logo_space2 = st.columns([1.6, 2, 1])
         with col_logo:
             try:
-                st.image(LOGO_PATH, width=250) # Laraskan saiz jika perlu
+                st.image(LOGO_PATH, width=250)
             except Exception as e:
                 st.warning(f"Gagal memaparkan logo: {e}")
-    # else: # Tidak perlu warning di sini jika logo adalah pilihan
-    #     st.warning(f"Fail logo tidak ditemui di: {LOGO_PATH}") 
     
-    # Semak status log masuk
     if not authentication_ui():
-        return # Hentikan pelaksanaan jika tidak disahkan
-    
-    # Jika disahkan, dapatkan username dari session_state
+        return
+
     current_username = st.session_state.username
 
-    # Paparkan nama pengguna dan butang log keluar di sidebar
     with st.sidebar:
         st.markdown(f"#### 👤 Pengguna: {current_username}")
         if st.button("🚪 Log Keluar", use_container_width=True, key="main_logout_button"):
-            # Reset state berkaitan sesi pengguna
             st.session_state.authenticated = False
             st.session_state.username = None
-            st.session_state.session_id = "new" # Reset ke sesi baru
+            st.session_state.session_id = "new"
             st.session_state.chat_history = []
-            # Anda mungkin mahu reset state lain yang spesifik pengguna di sini
             st.rerun()
-        st.markdown("---") # Pembahagi selepas log keluar
+        st.markdown("---")
 
-    # Kod utama chatbot selepas ini
     st.markdown("<h1 style='text-align: center; margin-top: 0px; margin-bottom: 10px;'>🤖 DFK Stembot</h1>", unsafe_allow_html=True)
-    
+
     available_ollama_models = get_ollama_models_cached()
     if not available_ollama_models:
         st.error("Tidak dapat memuatkan senarai model dari Ollama.")
-    
-    initialize_session_state(available_ollama_models) # Inisialisasi state umum
+
+    initialize_session_state(available_ollama_models)
 
     if st.session_state.selected_ollama_model:
         st.markdown(f"<p style='text-align: center; color: grey; margin-bottom: 20px;'>Model Aktif: <b>{st.session_state.selected_ollama_model.split(':')[0]}</b></p>", unsafe_allow_html=True)
     else:
         st.markdown("<p style='text-align: center; color: red; margin-bottom: 20px;'>Model tidak dipilih</p>", unsafe_allow_html=True)
-    
+
     st.markdown("---")
 
-    selected_session_id_from_ui = display_sidebar(available_ollama_models, current_username) # Hantar username
-    handle_session_logic(current_username, selected_session_id_from_ui) # Hantar username
-    
+    selected_session_id_from_ui = display_sidebar(available_ollama_models, current_username)
+    handle_session_logic(current_username, selected_session_id_from_ui)
+
     with st.sidebar:
-        # st.markdown("---") # Pembahagi sudah ada di atas
         st.markdown("#### 📎 Muat Naik & Analisis Fail")
         uploader_key = f"file_uploader_{st.session_state.uploader_key_counter}"
         uploaded_file = st.file_uploader(
@@ -834,7 +799,7 @@ def main():
                 })
                 if st.session_state.session_id == "new":
                     st.session_state.session_id = st.session_state.current_filename_prefix
-                save_chat_session(current_username, st.session_state.session_id, st.session_state.chat_history) # Guna username
+                save_chat_session(current_username, st.session_state.session_id, st.session_state.chat_history)
             
             elif extracted_text is None: 
                 pass 
@@ -865,7 +830,7 @@ def main():
         })
         if st.session_state.session_id == "new":
             st.session_state.session_id = st.session_state.current_filename_prefix
-        save_chat_session(current_username, st.session_state.session_id, st.session_state.chat_history) # Guna username
+        save_chat_session(current_username, st.session_state.session_id, st.session_state.chat_history)
         
         total_messages = len(st.session_state.chat_history)
         page_size = 10 
@@ -874,6 +839,7 @@ def main():
 
     display_export_options()
 
+# PEMBETULAN: Ralat sintaks di sini
 if __name__ == "__main__":
     main()
         # Cadangan untuk fail requirements.txt:
