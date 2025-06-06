@@ -1,0 +1,2 @@
+Node.js dan npm: Diperlukan untuk menjalankan SvelteKit. Muat turun dari nodejs.org.
+pip install "fastapi[all]" uvicorn python-jose[cryptography] passlib[bcrypt]
