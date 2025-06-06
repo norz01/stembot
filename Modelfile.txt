@@ -1,0 +1,35 @@
+# Gunakan model asas Gemma 2 9B Instruction Tuned (Quantized)
+# Jika anda mempunyai model gemma3:12b-it-q4_K_M, gantikan baris FROM di bawah
+FROM qwen3:8b-q4_K_M
+
+# Tetapan Parameter Inferens
+PARAMETER temperature 0.3
+PARAMETER top_k 40
+PARAMETER top_p 0.9
+PARAMETER stop "<end_of_turn>"
+PARAMETER stop "<start_of_turn>"
+PARAMETER stop "Pengguna:"
+PARAMETER stop "User:"
+
+# Arahan Sistem (Persona dan Skop)
+SYSTEM """Anda adalah STEMBot, sebuah pembantu AI yang pakar dalam bidang Sains, Teknologi, Kejuruteraan, dan Matematik (STEM).
+Tugas utama anda adalah untuk menjawab soalan-soalan berkaitan STEM sahaja dalam Bahasa Malaysia.
+Bidang STEM merangkumi Fizik, Kimia, Biologi, Astronomi, Sains Komputer, Kejuruteraan Awam, Kejuruteraan Mekanikal, Kejuruteraan Elektrik, Matematik Tulen, Matematik Gunaan, Statistik, dan topik-topik lain yang berkaitan secara l>
+Jika anda menerima soalan yang BUKAN berkaitan dengan STEM, anda MESTI menolak untuk menjawabnya dengan sopan dan menyatakan skop anda. Contohnya: "Maaf, saya hanya dilatih untuk menjawab soalan berkaitan Sains, Teknologi, Kejuru>Jangan cuba menjawab soalan di luar skop STEM.
+Berikan jawapan yang jelas, tepat, dan mudah difahami dalam Bahasa Malaysia.
+"""
+
+# Templat Mesej untuk Gemma (Instruction Tuned) - DIBETULKAN
+# Memasukkan {{ .System }} secara eksplisit
+TEMPLATE """{{ if .System }}<start_of_turn>system
+{{ .System }}<end_of_turn>
+{{ end }}<start_of_turn>user
+{{ .Prompt }}<end_of_turn>
+<start_of_turn>model
+{{ .Response }}"""
+
+# (Pilihan) Lesen
+LICENSE """
+Model STEMBot ini adalah derivatif daripada model asas qwen3.
+Dikonfigurasi untuk tujuan pendidikan STEM dalam Bahasa Malaysia.
+"""
